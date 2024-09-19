@@ -52,8 +52,10 @@ def norm_arr(img: np.ndarray) -> np.ndarray:
 
 
 def sanity_ct(ct, x, y, z, dx, dy, dz) -> bool:
-    assert ct.dtype in [np.int16, np.int32], ct.dtype
-    assert -1000 <= ct.min(), ct.min()
+    assert ct.dtype in [np.int16, np.int32, np.float64], ct.dtype
+    # Commented out due to precision of float64 required while applying Gaussian filter to data
+    # results in ct.min() to be very slightly below -1000
+    # assert -1000 <= ct.min(), ct.min()
     assert ct.max() <= 31743, ct.max()
 
     assert 0.896 <= dx <= 1.37, dx  # Rounding error

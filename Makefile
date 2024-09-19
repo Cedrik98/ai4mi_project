@@ -26,5 +26,6 @@ data/SEGTHOR: data/segthor_train
 	$(info $(green)python $(CFLAGS) slice_segthor.py$(reset))
 	rm -rf $@_tmp $@
 	python $(CFLAGS) slice_segthor.py --source_dir $^ --dest_dir $@_tmp \
-		--shape 256 256 --retain 10
+		--shape 256 256 --retain 20
+# ^^ retaining 20 because dataset size doubled from 40 to 80
 	mv $@_tmp $@
