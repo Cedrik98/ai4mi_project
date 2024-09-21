@@ -83,10 +83,20 @@ resize_: Callable = partial(resize, mode="constant", preserve_range=True, anti_a
 
 
 def slice_patient(id_: str, dest_path: Path, source_path: Path, shape: tuple[int, int],
-                  test_mode: bool = False) -> tuple[float, float, float]:
+                  test_mode: bool = False, with_gaussian_dataset: bool = False) -> tuple[float, float, float]:
     id_path: Path = source_path / ("train" if not test_mode else "test") / id_
 
-    ct_path: Path = (id_path / f"{id_}.nii.gz") if not test_mode else (source_path / "test" / f"{id_}.nii.gz")
+    # Use 'train' folder for test patients only when with_gaussian_dataset is True
+    if with_gaussian_dataset:
+        id_path: Path = source_path / "train" / id_
+    else:
+        if test_mode:
+            id_path: Path = source_path / "train" / id_
+        else:
+            id_path: Path = source_path / ("train" if not test_mode else "test") / id_
+
+    # Load CT image
+    ct_path: Path = id_path / f"{id_}.nii.gz"
     nib_obj = nib.load(str(ct_path))
     ct: np.ndarray = np.asarray(nib_obj.dataobj)
     # dx, dy, dz = nib_obj.header.get_zooms()
@@ -137,23 +147,50 @@ def slice_patient(id_: str, dest_path: Path, source_path: Path, shape: tuple[int
     return dx, dy, dz
 
 
-def get_splits(src_path: Path, retains: int, fold: int) -> tuple[list[str], list[str], list[str]]:
+def get_splits(src_path: Path, retains: int, fold: int, with_gaussian_dataset: bool, test_mode: bool = False) -> tuple[list[str], list[str], list[str]]:
     ids: list[str] = sorted(map_(lambda p: p.name, (src_path / 'train').glob('*')))
-    print(f"Founds {len(ids)} in the id list")
+    print(f"Found {len(ids)} in the id list")
     print(ids[:10])
-    assert len(ids) > retains
 
-    random.shuffle(ids)  # Shuffle before to avoid any problem if the patients are sorted in any way
-    validation_slice = slice(fold * retains, (fold + 1) * retains)
-    validation_ids: list[str] = ids[validation_slice]
-    assert len(validation_ids) == retains
+    if with_gaussian_dataset:
+        test_ids: list[str] = ["Patient_34", "Patient_18", "Patient_39", "Patient_17", "Patient_07"]
 
-    training_ids: list[str] = [e for e in ids if e not in validation_ids]
-    assert (len(training_ids) + len(validation_ids)) == len(ids)
+        print(f"Selected {len(test_ids)} test ids: {test_ids}")
 
-    test_ids: list[str] = sorted(map_(lambda p: Path(p.stem).stem, (src_path / 'test').glob('*')))
-    print(f"Founds {len(test_ids)} test ids")
-    print(test_ids[:10])
+        # Remove the test_ids from the full ids list
+        remaining_ids = [str(id_) for id_ in ids if str(id_) not in test_ids]
+
+        random.shuffle(remaining_ids)  # Shuffle before to avoid any problem if the patients are sorted in any way
+
+        validation_slice = slice(fold * retains, (fold + 1) * retains)
+        validation_ids: list[str] = remaining_ids[validation_slice]
+        assert len(validation_ids) == retains
+
+        training_ids: list[str] = [e for e in remaining_ids if e not in validation_ids]
+        assert (len(training_ids) + len(validation_ids)) == len(remaining_ids)
+
+    else:
+        print(f"Total patients: {len(ids)}")
+        random.shuffle(ids)  # Shuffle before to avoid any problem if the patients are sorted in any way
+        
+        if test_mode:
+            test_ids: list[str] = ["Patient_34", "Patient_18", "Patient_39", "Patient_17", "Patient_07"]
+            print(f"Selected {len(test_ids)} test ids: {test_ids}")
+
+            # Remove the test_ids from the full ids list
+            remaining_ids = [str(id_) for id_ in ids if str(id_) not in test_ids]
+        else:
+            remaining_ids = ids[:]
+            test_ids: list[str] = sorted(map_(lambda p: Path(p.stem).stem, (src_path / 'test').glob('*')))
+            print(f"Found {len(test_ids)} test ids")
+            print(test_ids[:10])
+        
+        validation_slice = slice(fold * retains, (fold + 1) * retains)
+        validation_ids: list[str] = remaining_ids[validation_slice]
+        assert len(validation_ids) == retains
+
+        training_ids: list[str] = [e for e in remaining_ids if e not in validation_ids]
+        assert (len(training_ids) + len(validation_ids)) == len(remaining_ids)
 
     return training_ids, validation_ids, test_ids
 
@@ -169,12 +206,15 @@ def main(args: argparse.Namespace):
     training_ids: list[str]
     validation_ids: list[str]
     test_ids: list[str]
-    training_ids, validation_ids, test_ids = get_splits(src_path, args.retains, args.fold)
+    training_ids, validation_ids, test_ids = get_splits(src_path, args.retains, args.fold, args.with_gaussian_dataset, args.test_mode)
 
     resolution_dict: dict[str, tuple[float, float, float]] = {}
 
     split_ids: list[str]
     for mode, split_ids in zip(["train", "val", "test"], [training_ids, validation_ids, test_ids]):
+        if not args.with_gaussian_dataset:
+            split_ids = [patient_id for patient_id in split_ids if patient_id <= "Patient_40"]
+        
         dest_mode: Path = dest_path / mode
         print(f"Slicing {len(split_ids)} pairs to {dest_mode}")
 
@@ -182,7 +222,8 @@ def main(args: argparse.Namespace):
                                  dest_path=dest_mode,
                                  source_path=src_path,
                                  shape=tuple(args.shape),
-                                 test_mode=mode == 'test')
+                                 test_mode=mode == 'test',
+                                 with_gaussian_dataset=args.with_gaussian_dataset)
         resolutions: list[tuple[float, float, float]]
         iterator = tqdm_(split_ids)
         match args.process:
@@ -212,6 +253,10 @@ def get_args() -> argparse.Namespace:
     parser.add_argument('--fold', type=int, default=0)
     parser.add_argument('--process', '-p', type=int, default=1,
                         help="The number of cores to use for processing")
+    parser.add_argument('--with_gaussian_dataset', action='store_true', default=False, 
+                        help="Flag to split with the gaussian dataset, test split of 5 patients from patients 1-40 and 41-80 each")
+    parser.add_argument('--test_mode', action='store_true', default=False,
+                        help="Flag to set testing on, to pick 5 patients from the dataset from patients 1-40")
     args = parser.parse_args()
     random.seed(args.seed)
 

@@ -261,6 +261,95 @@ def runTraining(args):
             torch.save(net, args.dest / "bestmodel.pkl")
             torch.save(net.state_dict(), args.dest / "bestweights.pt")
 
+def runTest(args):
+    print(f">>> Running test on {args.dataset} using the best model.")
+
+    # Load the best model saved during training
+    best_model_path = args.dest / "bestmodel.pkl"
+    if not best_model_path.exists():
+        raise FileNotFoundError(f"Best model not found at {best_model_path}. Ensure training has been done and the best model is saved.")
+
+    # Load the model
+    net = torch.load(best_model_path)
+    net.eval()
+
+    device = torch.device("cuda") if args.gpu and torch.cuda.is_available() else torch.device("cpu")
+    net.to(device)
+
+    K: int = datasets_params[args.dataset]['K']
+    root_dir = Path("data") / args.dataset
+
+    # Prepare the test dataset and loader
+    img_transform = transforms.Compose([
+        lambda img: img.convert('L'),
+        lambda img: np.array(img)[np.newaxis, ...],
+        lambda nd: nd / 255,  # max <= 1
+        lambda nd: torch.tensor(nd, dtype=torch.float32)
+    ])
+
+    gt_transform = transforms.Compose([
+        lambda img: np.array(img)[...],
+        lambda nd: nd / (255 / (K - 1)) if K != 5 else nd / 63,
+        lambda nd: torch.tensor(nd, dtype=torch.int64)[None, ...],  # Add one dimension to simulate batch
+        lambda t: class2one_hot(t, K=K),
+        itemgetter(0)
+    ])
+
+    test_set = SliceDataset('test',
+                            root_dir,
+                            img_transform=img_transform,
+                            gt_transform=gt_transform,
+                            debug=args.debug)
+
+    test_loader = DataLoader(test_set,
+                             batch_size=datasets_params[args.dataset]['B'],
+                             num_workers=args.num_workers,
+                             shuffle=False)
+
+    log_dice_test: Tensor = torch.zeros((len(test_loader.dataset), K))
+    # log_hausdorff_test: Tensor = torch.zeros((len(test_loader.dataset), K))
+
+    with torch.no_grad():
+        j = 0
+        tq_iter = tqdm_(enumerate(test_loader), total=len(test_loader), desc=">> Testing")
+        for i, data in tq_iter:
+            img = data['images'].to(device)
+            gt = data['gts'].to(device)
+
+            pred_logits = net(img)
+            pred_probs = F.softmax(1 * pred_logits, dim=1)
+
+            # Metrics computation, not used for training
+            pred_seg = probs2one_hot(pred_probs)
+            log_dice_test[j:j + img.size(0), :] = dice_coef(pred_seg, gt)  # One DSC value per sample and per class
+            
+            # Save test predictions
+            with warnings.catch_warnings():
+                warnings.filterwarnings('ignore', category=UserWarning)
+                predicted_class: Tensor = probs2class(pred_probs)
+                mult: int = 63 if K == 5 else (255 / (K - 1))
+                save_images(predicted_class * mult,
+                            data['stems'],
+                            args.dest / "test_results")
+
+            j += img.size(0)
+
+            # Postfix logging for dice and hausdorff (in the future)
+            postfix_dict: dict[str, str] = {"Dice": f"{log_dice_test[:j, 1:].mean():05.3f}"}
+            tq_iter.set_postfix(postfix_dict)
+
+    # Calculate and print final Dice score over the entire test set
+    mean_dice_per_class = log_dice_test.mean(dim=0)
+    print(f"Final Dice scores for the test set:")
+    for k in range(1, K):
+        print(f"Class {k}: Dice = {mean_dice_per_class[k]:05.3f}")
+    
+    mean_dice = mean_dice_per_class[1:].mean()  # Skip background class
+    print(f"Mean Dice score: {mean_dice:05.3f}")
+
+    # Save test logs
+    np.save(args.dest / "dice_test.npy", log_dice_test)
+    print(f">>> Test completed. Results saved to {args.dest}.")
 
 def main():
     parser = argparse.ArgumentParser()
@@ -278,12 +367,20 @@ def main():
                              "to test the logic around epochs and logging easily.")
     parser.add_argument('--opt_metric', default='dice', choices=['dice', 'hausdorff'],
                         help="Metric to optimize: 'dice' for Dice score or 'hausdorff' for Hausdorff distance.")
+    parser.add_argument('--test', action='store_true',
+                        help="Run the test phase after training on the SEGTHOR/test dataset.")
+    parser.add_argument('--only_test', action='store_true', help="Run only the test phase without training.")
 
     args = parser.parse_args()
 
     pprint(args)
 
-    runTraining(args)
+    if args.only_test:
+        runTest(args)
+    else:
+        runTraining(args)
+        if args.test:
+            runTest(args)
 
 
 if __name__ == '__main__':
