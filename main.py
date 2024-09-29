@@ -38,8 +38,14 @@ from torchvision import transforms
 from torch.utils.data import DataLoader
 
 from dataset import SliceDataset
+
 from ShallowNet import shallowCNN
 from ENet import ENet
+from vmunet import VMUNet
+from vision_transformer import SwinUnet
+
+from ShallowNet import shallowCNN
+
 from utils import (Dcm,
                    class2one_hot,
                    probs2one_hot,
@@ -48,53 +54,98 @@ from utils import (Dcm,
                    dice_coef,
                    save_images)
 
-from losses import (CrossEntropy)
+from losses import *
 
 # import hausdorff
 
-datasets_params: dict[str, dict[str, Any]] = {}
-# K for the number of classes
-# Avoids the clases with C (often used for the number of Channel)
-datasets_params["TOY2"] = {'K': 2, 'net': shallowCNN, 'B': 2}
-datasets_params["SEGTHOR"] = {'K': 5, 'net': ENet, 'B': 8}
-
 
 def setup(args) -> tuple[nn.Module, Any, Any, DataLoader, DataLoader, int]:
+    
     # Networks and scheduler
     gpu: bool = args.gpu and torch.cuda.is_available()
     device = torch.device("cuda") if gpu else torch.device("cpu")
     print(f">> Picked {device} to run experiments")
 
-    K: int = datasets_params[args.dataset]['K']
-    net = datasets_params[args.dataset]['net'](1, K)
-    net.init_weights()
-    net.to(device)
+    K: int = args.classes
 
-    lr = 0.0005
-    optimizer = torch.optim.Adam(net.parameters(), lr=lr, betas=(0.9, 0.999))
+    # ENet
+    if args.model == 'ENet':
+        net = ENet(1, K)
+        net.init_weights()
+        net.to(device)
+        optimizer = torch.optim.Adam(net.parameters(), lr=args.lr, betas=(0.9, 0.999))
+        scheduler = None
+
+    # SWIN
+    if args.model == 'SwinUnet':
+        if args.pretrained_weights:
+            net = SwinUnet(img_size=224, num_classes=K)
+            net.load_from('./pretrained_ckpt/swin_tiny_patch4_window7_224.pth')
+            if args.transfer_learning:
+                net.setup_transfer_learning_swin()
+        else:
+            net = SwinUnet(img_size=256, num_classes=K)
+
+        net.to(device)
+
+        optimizer = torch.optim.AdamW(net.parameters(), lr=args.lr, betas=(0.9, 0.999), eps=1e-08)
+        scheduler =  None
+    
+    # VMUNet
+    if args.model == 'VMUNet':
+        net = VMUNet()
+        if args.pretrained_weights:
+            net.load_from('./pretrained_ckpt/vmamba_tiny_e292.pth')
+            if args.transfer_learning:
+                net.setup_transfer_learning_vmunet()
+
+        net.to(device)
+
+        optimizer = torch.optim.AdamW(net.parameters(), lr=args.lr, betas=(0.9, 0.999), eps=1e-08)
+        scheduler =  torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100, eta_min=0.00001, last_epoch=-1)
+
 
     # Dataset part
-    B: int = datasets_params[args.dataset]['B']
+    B: int = args.batch_size
     root_dir = Path("data") / args.dataset
 
-    img_transform = transforms.Compose([
-        lambda img: img.convert('L'),
-        lambda img: np.array(img)[np.newaxis, ...],
-        lambda nd: nd / 255,  # max <= 1
-        lambda nd: torch.tensor(nd, dtype=torch.float32)
-    ])
+    if args.model == 'SwinUnet' and args.pretrained_weights:
+        img_transform = transforms.Compose([
+            transforms.Resize((224, 224)),
+            lambda img: img.convert('L'),
+            lambda img: np.array(img)[np.newaxis, ...],
+            lambda nd: nd / 255,  # max <= 1
+            lambda nd: torch.tensor(nd, dtype=torch.float32)
+        ])
 
-    gt_transform = transforms.Compose([
-        lambda img: np.array(img)[...],
-        # The idea is that the classes are mapped to {0, 255} for binary cases
-        # {0, 85, 170, 255} for 4 classes
-        # {0, 51, 102, 153, 204, 255} for 6 classes
-        # Very sketchy but that works here and that simplifies visualization
-        lambda nd: nd / (255 / (K - 1)) if K != 5 else nd / 63,  # max <= 1
-        lambda nd: torch.tensor(nd, dtype=torch.int64)[None, ...],  # Add one dimension to simulate batch
-        lambda t: class2one_hot(t, K=K),
-        itemgetter(0)
-    ])
+        gt_transform = transforms.Compose([
+            transforms.Resize((224, 224)),
+            lambda img: np.array(img)[...],
+            lambda nd: nd / (255 / (K - 1)) if K != 5 else nd / 63,  # max <= 1
+            lambda nd: torch.tensor(nd, dtype=torch.int64)[None, ...],  # Add one dimension to simulate batch
+            lambda t: class2one_hot(t, K=K),
+            itemgetter(0)
+        ])
+    else:
+        img_transform = transforms.Compose([
+                lambda img: img.convert('L'),
+                lambda img: np.array(img)[np.newaxis, ...],
+                lambda nd: nd / 255,  # max <= 1
+                lambda nd: torch.tensor(nd, dtype=torch.float32)
+        ])
+
+        gt_transform = transforms.Compose([
+            lambda img: np.array(img)[...],
+            # The idea is that the classes are mapped to {0, 255} for binary cases
+            # {0, 85, 170, 255} for 4 classes
+            # {0, 51, 102, 153, 204, 255} for 6 classes
+            # Very sketchy but that works here and that simplifies visualization
+            lambda nd: nd / (255 / (K - 1)) if K != 5 else nd / 63,  # max <= 1
+            lambda nd: torch.tensor(nd, dtype=torch.int64)[None, ...],  # Add one dimension to simulate batch
+            lambda t: class2one_hot(t, K=K),
+            itemgetter(0)
+        ])
+
 
     train_set = SliceDataset('train',
                              root_dir,
@@ -118,19 +169,30 @@ def setup(args) -> tuple[nn.Module, Any, Any, DataLoader, DataLoader, int]:
 
     args.dest.mkdir(parents=True, exist_ok=True)
 
-    return (net, optimizer, device, train_loader, val_loader, K)
+    return (net, optimizer, scheduler, device, train_loader, val_loader, K)
 
 
 def runTraining(args):
     print(f">>> Setting up to train on {args.dataset} with {args.mode}")
-    net, optimizer, device, train_loader, val_loader, K = setup(args)
+    net, optimizer, scheduler, device, train_loader, val_loader, K = setup(args)
 
-    if args.mode == "full":
-        loss_fn = CrossEntropy(idk=list(range(K)))  # Supervise both background and foreground
-    elif args.mode in ["partial"] and args.dataset in ['SEGTHOR', 'SEGTHOR_STUDENTS']:
-        loss_fn = CrossEntropy(idk=[0, 1, 3, 4])  # Do not supervise the heart (class 2)
-    else:
-        raise ValueError(args.mode, args.dataset)
+    # if args.mode == "full":
+    #     ce_loss = CrossEntropy(idk=list(range(K)))  # Supervise both background and foreground
+    # elif args.mode in ["partial"] and args.dataset in ['SEGTHOR', 'SEGTHOR_STUDENTS']:
+    #     ce_loss = CrossEntropy(idk=[0, 1, 3, 4])  # Do not supervise the heart (class 2)
+    # else:
+    #     raise ValueError(args.mode, args.dataset)
+
+    if args.loss == "CE":
+        loss_fn = CrossEntropy(idk=list(range(K)))
+    if args.loss == "Dice":
+        loss_fn = DiceLoss(smooth=1) 
+    if args.loss == "Focal":
+        loss_fn = FocalLoss(alpha=0.25, gamma=2.5, idk=list(range(K)))
+    if args.loss == "CEDice":
+        loss_fn = CEDiceLoss(dice_weight=0.5, ce_weight=0.5, smooth=1, idk=list(range(K)))
+    if args.loss == "FocalDice":
+        loss_fn = FocalDiceLoss(dice_weight=0.5, focal_weight=0.5, smooth=1, alpha=0.25, gamma=2.5, idk=list(range(K)))
 
     # Notice one has the length of the _loader_, and the other one of the _dataset_
     log_loss_tra: Tensor = torch.zeros((args.epochs, len(train_loader)))
@@ -172,9 +234,6 @@ def runTraining(args):
                     img = data['images'].to(device)
                     gt = data['gts'].to(device)
 
-                    if opt:  # So only for training
-                        opt.zero_grad()
-
                     # Sanity tests to see we loaded and encoded the data correctly
                     assert 0 <= img.min() and img.max() <= 1
                     B, _, W, H = img.shape
@@ -194,10 +253,21 @@ def runTraining(args):
                             # log_hausdorff[e, j + b, :] = hausdorff_dist
                             # log_hausdorff[e, j + b, :] = chamfer_dist
 
-                    loss = loss_fn(pred_probs, gt)
+                    # loss = loss_fn(pred_probs, gt)
+                    # log_loss[e, i] = loss.item()  # One loss value per batch (averaged in the loss)
+
+                    # If Enet is used, only use CE loss.
+                    if args.loss == "Focal" or args.loss == "FocalDice":
+                        loss = loss_fn(pred_probs, gt, pred_seg)
+                    else:
+                        loss = loss_fn(pred_probs, gt)           
+
+
                     log_loss[e, i] = loss.item()  # One loss value per batch (averaged in the loss)
 
+
                     if opt:  # Only for training
+                        opt.zero_grad()
                         loss.backward()
                         opt.step()
 
@@ -223,6 +293,9 @@ def runTraining(args):
                                             for k in range(1, K)}
 
                     tq_iter.set_postfix(postfix_dict)
+
+        if scheduler is not None:
+            scheduler.step()
 
         # I save it at each epochs, in case the code crashes or I decide to stop it early
         np.save(args.dest / "loss_tra.npy", log_loss_tra)
@@ -276,24 +349,48 @@ def runTest(args):
     device = torch.device("cuda") if args.gpu and torch.cuda.is_available() else torch.device("cpu")
     net.to(device)
 
-    K: int = datasets_params[args.dataset]['K']
+    K: int = args.classes
+    B: int = args.batch_size
+
     root_dir = Path("data") / args.dataset
 
     # Prepare the test dataset and loader
-    img_transform = transforms.Compose([
-        lambda img: img.convert('L'),
-        lambda img: np.array(img)[np.newaxis, ...],
-        lambda nd: nd / 255,  # max <= 1
-        lambda nd: torch.tensor(nd, dtype=torch.float32)
-    ])
+    if args.model == 'SwinUnet' and args.pretrained_weights:
+        img_transform = transforms.Compose([
+            transforms.Resize((224, 224)),
+            lambda img: img.convert('L'),
+            lambda img: np.array(img)[np.newaxis, ...],
+            lambda nd: nd / 255,  # max <= 1
+            lambda nd: torch.tensor(nd, dtype=torch.float32)
+        ])
 
-    gt_transform = transforms.Compose([
-        lambda img: np.array(img)[...],
-        lambda nd: nd / (255 / (K - 1)) if K != 5 else nd / 63,
-        lambda nd: torch.tensor(nd, dtype=torch.int64)[None, ...],  # Add one dimension to simulate batch
-        lambda t: class2one_hot(t, K=K),
-        itemgetter(0)
-    ])
+        gt_transform = transforms.Compose([
+            transforms.Resize((224, 224)),
+            lambda img: np.array(img)[...],
+            lambda nd: nd / (255 / (K - 1)) if K != 5 else nd / 63,  # max <= 1
+            lambda nd: torch.tensor(nd, dtype=torch.int64)[None, ...],  # Add one dimension to simulate batch
+            lambda t: class2one_hot(t, K=K),
+            itemgetter(0)
+        ])
+    else:
+        img_transform = transforms.Compose([
+                lambda img: img.convert('L'),
+                lambda img: np.array(img)[np.newaxis, ...],
+                lambda nd: nd / 255,  # max <= 1
+                lambda nd: torch.tensor(nd, dtype=torch.float32)
+        ])
+
+        gt_transform = transforms.Compose([
+            lambda img: np.array(img)[...],
+            # The idea is that the classes are mapped to {0, 255} for binary cases
+            # {0, 85, 170, 255} for 4 classes
+            # {0, 51, 102, 153, 204, 255} for 6 classes
+            # Very sketchy but that works here and that simplifies visualization
+            lambda nd: nd / (255 / (K - 1)) if K != 5 else nd / 63,  # max <= 1
+            lambda nd: torch.tensor(nd, dtype=torch.int64)[None, ...],  # Add one dimension to simulate batch
+            lambda t: class2one_hot(t, K=K),
+            itemgetter(0)
+        ])
 
     test_set = SliceDataset('test',
                             root_dir,
@@ -302,7 +399,7 @@ def runTest(args):
                             debug=args.debug)
 
     test_loader = DataLoader(test_set,
-                             batch_size=datasets_params[args.dataset]['B'],
+                             batch_size=B,
                              num_workers=args.num_workers,
                              shuffle=False)
 
@@ -355,7 +452,7 @@ def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--epochs', default=200, type=int)
-    parser.add_argument('--dataset', default='TOY2', choices=datasets_params.keys())
+    parser.add_argument('--dataset', default='TOY2', choices=['TOY2', 'SEGTHOR'])
     parser.add_argument('--mode', default='full', choices=['partial', 'full'])
     parser.add_argument('--dest', type=Path, required=True,
                         help="Destination directory to save the results (predictions and weights).")
@@ -370,6 +467,13 @@ def main():
     parser.add_argument('--test', action='store_true',
                         help="Run the test phase after training on the SEGTHOR/test dataset.")
     parser.add_argument('--only_test', action='store_true', help="Run only the test phase without training.")
+    parser.add_argument('--transfer_learning', default=False, action='store_true')
+    parser.add_argument('--pretrained_weights', default=False, action='store_true')
+    parser.add_argument('--loss', default='CE', choices=['CE', 'Focal', 'Dice', 'CEDice', 'FocalDice'])
+    parser.add_argument('--model', default='ENet', choices=['ENet','VMUNet','SwinUnet'])
+    parser.add_argument('--batch_size', default=8, type=int)
+    parser.add_argument('--classes', default=5, type=int)
+    parser.add_argument('--lr', default=0.0001, type=float)
 
     args = parser.parse_args()
 

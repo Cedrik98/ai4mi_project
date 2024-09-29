@@ -32,7 +32,6 @@ class CrossEntropy():
     def __init__(self, **kwargs):
         # Self.idk is used to filter out some classes of the target mask. Use fancy indexing
         self.idk = kwargs['idk']
-        print(f"Initialized {self.__class__.__name__} with {kwargs}")
 
     def __call__(self, pred_softmax, weak_target):
         assert pred_softmax.shape == weak_target.shape
@@ -51,3 +50,83 @@ class CrossEntropy():
 class PartialCrossEntropy(CrossEntropy):
     def __init__(self, **kwargs):
         super().__init__(idk=[1], **kwargs)
+
+
+class DiceLoss():
+    def __init__(self, **kwargs):
+        self.smooth = kwargs['smooth']
+
+    def __call__(self, pred_probs, target):
+        assert pred_probs.shape == target.shape
+        
+        size = pred_probs.size(0)
+        pred_probs = pred_probs.reshape(size, -1)
+        target_ = target.reshape(size, -1)
+
+        intersection = pred_probs * target_
+        dice_score = (2 * intersection.sum(1) + self.smooth) / (pred_probs.sum(1) + target_.sum(1) + self.smooth)
+        dice_loss = 1 - dice_score.sum() / size
+
+        return dice_loss
+
+
+class FocalLoss():
+    def __init__(self, **kwargs):
+        self.alpha = kwargs['alpha']
+        self.gamma = kwargs['gamma']
+        self.idk = kwargs['idk']
+        self.ce_loss_func = CrossEntropy(idk=self.idk)
+
+    def __call__(self, pred_probs, target, pred_seg):
+        ce_loss = self.ce_loss_func(pred_probs, target)
+
+        # Calculate modulating factor
+        p_t = (pred_probs * pred_seg).sum(dim=1)
+        modulating_factor = (1 - p_t) ** self.gamma
+
+        # Compute focal loss
+        focal_loss = self.alpha * modulating_factor * ce_loss
+
+        return focal_loss.mean()
+
+
+# Class to combine CrossEntropy and Dice Loss
+class CEDiceLoss():
+    def __init__(self, **kwargs):
+        self.dice_loss_func = DiceLoss(**kwargs)
+        self.ce_loss_func = CrossEntropy(**kwargs)
+        self.dice_weight = kwargs['dice_weight']
+        self.ce_weight = kwargs['ce_weight']
+
+    def __call__(self, pred_probs, target):
+        # Calculate Dice loss
+        dice_loss = self.dice_loss_func(pred_probs, target)
+
+        # Calculate Cross-Entropy loss
+        ce_loss = self.ce_loss_func(pred_probs, target)
+
+        # Combine the two losses
+        combined_loss = self.dice_weight * dice_loss + self.ce_weight * ce_loss
+
+        return combined_loss
+
+
+# Class to combine Focal Loss and Dice Loss alpha=0.25, gamma=2.0, dice_weight=0.5, focal_weight=0.5, smooth=1, idk=[0, 1, 2, 3, 4],
+class FocalDiceLoss():
+    def __init__(self, **kwargs):
+        self.dice_loss_func = DiceLoss(**kwargs)
+        self.focal_loss_func = FocalLoss(**kwargs)
+        self.dice_weight = kwargs['dice_weight']
+        self.focal_weight = kwargs['focal_weight']
+
+    def __call__(self, pred_probs, target, pred_seg):
+        # Calculate Dice loss
+        dice_loss = self.dice_loss_func(pred_probs, target)
+
+        # Calculate Focal loss
+        focal_loss = self.focal_loss_func(pred_probs, target, pred_seg)
+
+        # Combine the two losses
+        combined_loss = self.dice_weight * dice_loss + self.focal_weight * focal_loss
+
+        return combined_loss
