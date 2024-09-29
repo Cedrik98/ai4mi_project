@@ -27,7 +27,7 @@ data/SEGTHOR: data/segthor_train
 	$(info $(green)python $(CFLAGS) slice_segthor.py$(reset))
 	rm -rf $@_tmp $@
 	python $(CFLAGS) slice_segthor.py --source_dir $^ --dest_dir $@_tmp \
-		--shape 256 256 --retain 19 --with_gaussian_dataset
+		--shape 256 256 --retain 19 --with_gaussian_dataset --test_mode
 # ^^ retaining 19 because dataset size doubled from 35 to 75
 	mv $@_tmp $@
 
