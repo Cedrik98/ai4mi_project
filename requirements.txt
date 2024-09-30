@@ -6,3 +6,6 @@ tqdm
 pillow
 scikit-image
 matplotlib
+einops
+timm
+mamba-ssm
