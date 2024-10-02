@@ -78,18 +78,26 @@ class VMUNet(nn.Module):
 
 
     def setup_transfer_learning_vmunet(self):
-        # TODO: FIX
-        """
-        Freeze all layers in the model except the last one (final_conv).
-        """
-        # Freeze all layers
+        # Freeze all layers by default
         for param in self.vmunet.parameters():
             param.requires_grad = False
 
-        # retrain the last conv layer
-        for param in self.vmunet.final_conv.parameters():
+        # Unfreeze last 2 encoder layers
+        for param in self.vmunet.layers[-2:].parameters(): 
             param.requires_grad = True
 
-        # retrain the last upsampling layer:
+        # Unfreeze all layers of the decoder
+        for param in self.vmunet.layers_up.parameters():
+            param.requires_grad = True
+
         for param in self.vmunet.final_up.parameters():
             param.requires_grad = True
+
+        for param in self.vmunet.final_conv.parameters(): 
+            param.requires_grad = True
+
+        #Unfreeze normalization layers
+        #for m in self.vmunet.modules():
+        #    if isinstance(m, nn.LayerNorm):
+        #        for param in m.parameters():
+        #            param.requires_grad = True

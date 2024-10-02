@@ -87,19 +87,15 @@ class SwinUnet(nn.Module):
             print("none pretrain")
  
     def setup_transfer_learning_swin(self):
-        # TODO: FIX
-        """
-        Freeze all layers in the model except the last upsampling layer and the final output conv layer.
-        """
-        # Freeze all layers of the swin_unet backbone
+        # Freeze the entire network
         for param in self.swin_unet.parameters():
             param.requires_grad = False
 
-        # Retrain the last upsampling layer (self.swin_unet.up) and final convolutional layer (self.swin_unet.output)
-        if hasattr(self.swin_unet, 'up'):
-            for param in self.swin_unet.up.parameters():
-                param.requires_grad = True
+        # Unfreeze the last layers of the encoder
+        for param in self.swin_unet.layers[-2:].parameters():
+            param.requires_grad = True
 
-        if hasattr(self.swin_unet, 'output'):
-            for param in self.swin_unet.output.parameters():
-                param.requires_grad = True
+        # Unfreeze all layers of the decoder 
+        for param in self.swin_unet.layers_up.parameters():
+            param.requires_grad = True
+
