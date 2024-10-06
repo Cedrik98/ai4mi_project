@@ -17,32 +17,25 @@ data/TOY2:
 
 
 # Extraction and slicing for Segthor
-<<<<<<< HEAD
 # data/segthor_train: data/segthor_train.zip
 # 	$(info $(yellow)unzip $<$(reset))
 # 	sha256sum -c data/segthor_train.sha256
 # 	unzip -q $<
-=======
-data/segthor_train: data/segthor_train.zip
-	$(info $(yellow)unzip $<$(reset))
-	sha256sum -c data/segthor_train.sha256
-	unzip -q $<
-	rm -f $@/.DS_STORE
->>>>>>> 882a705e75e813eb165777aebfbc1a137000d8f0
+# 	rm -f $@/.DS_STORE
 
 # Use with gaussian dataset + testset:
-data/SEGTHOR: data/segthor_train
-	$(info $(green)python $(CFLAGS) slice_segthor.py$(reset))
-	rm -rf $@_tmp $@
-	python $(CFLAGS) slice_segthor.py --source_dir $^ --dest_dir $@_tmp \
-		--shape 256 256 --retain 19 --with_gaussian_dataset --test_mode
-# ^^ retaining 19 because dataset size doubled from 35 to 75
-	mv $@_tmp $@
-
-# Use without gaussian dataset but with testset:
 # data/SEGTHOR: data/segthor_train
 # 	$(info $(green)python $(CFLAGS) slice_segthor.py$(reset))
 # 	rm -rf $@_tmp $@
 # 	python $(CFLAGS) slice_segthor.py --source_dir $^ --dest_dir $@_tmp \
-# 		--shape 256 256 --retain 8 --test_mode
+# 		--shape 256 256 --retain 19 --with_gaussian_dataset --test_mode
+# ^^ retaining 19 because dataset size doubled from 35 to 75
 # 	mv $@_tmp $@
+
+# Use without gaussian dataset but with testset:
+data/SEGTHOR: data/segthor_train
+	$(info $(green)python $(CFLAGS) slice_segthor.py$(reset))
+	rm -rf $@_tmp $@
+	python $(CFLAGS) slice_segthor.py --source_dir $^ --dest_dir $@_tmp \
+		--shape 256 256 --retain 8 --test_mode
+	mv $@_tmp $@
