@@ -56,9 +56,6 @@ from utils import (Dcm,
 
 from losses import *
 
-# import hausdorff
-
-
 def setup(args) -> tuple[nn.Module, Any, Any, DataLoader, DataLoader, int]:
     
     # Networks and scheduler
@@ -197,13 +194,10 @@ def runTraining(args):
     # Notice one has the length of the _loader_, and the other one of the _dataset_
     log_loss_tra: Tensor = torch.zeros((args.epochs, len(train_loader)))
     log_dice_tra: Tensor = torch.zeros((args.epochs, len(train_loader.dataset), K))
-    log_hausdorff_tra: Tensor = torch.zeros((args.epochs, len(train_loader.dataset), K))
     log_loss_val: Tensor = torch.zeros((args.epochs, len(val_loader)))
     log_dice_val: Tensor = torch.zeros((args.epochs, len(val_loader.dataset), K))
-    log_hausdorff_val: Tensor = torch.zeros((args.epochs, len(val_loader.dataset), K))
 
-    # best_dice: float = 0
-    best_metric: float = float('inf') if args.opt_metric == 'hausdorff' else 0.0
+    best_dice: float = 0
 
     for e in range(args.epochs):
         for m in ['train', 'val']:
@@ -216,7 +210,6 @@ def runTraining(args):
                     loader = train_loader
                     log_loss = log_loss_tra
                     log_dice = log_dice_tra
-                    log_hausdorff = log_hausdorff_tra
                 case 'val':
                     net.eval()
                     opt = None
@@ -225,7 +218,6 @@ def runTraining(args):
                     loader = val_loader
                     log_loss = log_loss_val
                     log_dice = log_dice_val
-                    log_hausdorff = log_hausdorff_val
 
             with cm():  # Either dummy context manager, or the torch.no_grad for validation
                 j = 0
@@ -244,14 +236,6 @@ def runTraining(args):
                     # Metrics computation, not used for training
                     pred_seg = probs2one_hot(pred_probs)
                     log_dice[e, j:j + B, :] = dice_coef(gt, pred_seg)  # One DSC value per sample and per class
-                    
-                    # if args.opt_metric == 'hausdorff':
-                    #     for b in range(B):
-                            # hausdorff_dist = hausdorff.hausdorff_distance(pred_seg[b].cpu().numpy(), gt[b].cpu().numpy())
-                            # hausdorff_dist = hausdorff.hausdorff_distance_contours(pred_seg[b], gt[b])
-                            # chamfer_dist = hausdorff.chamfer_distance(pred_seg[b], gt[b])
-                            # log_hausdorff[e, j + b, :] = hausdorff_dist
-                            # log_hausdorff[e, j + b, :] = chamfer_dist
 
                     # loss = loss_fn(pred_probs, gt)
                     # log_loss[e, i] = loss.item()  # One loss value per batch (averaged in the loss)
@@ -282,15 +266,11 @@ def runTraining(args):
 
                     j += B  # Keep in mind that _in theory_, each batch might have a different size
                     # For the DSC average: do not take the background class (0) into account:
-                    if args.opt_metric == 'hausdorff':
-                        postfix_dict: dict[str, str] = {"Hausdorff": f"{log_hausdorff[e, :j, 1:].mean():05.3f}",
-                                                        "Loss": f"{log_loss[e, :i + 1].mean():5.2e}"}
-                    else:
-                        postfix_dict: dict[str, str] = {"Dice": f"{log_dice[e, :j, 1:].mean():05.3f}",
-                                                        "Loss": f"{log_loss[e, :i + 1].mean():5.2e}"}
-                        if K > 2:
-                            postfix_dict |= {f"Dice-{k}": f"{log_dice[e, :j, k].mean():05.3f}"
-                                            for k in range(1, K)}
+                    postfix_dict: dict[str, str] = {"Dice": f"{log_dice[e, :j, 1:].mean():05.3f}",
+                                                    "Loss": f"{log_loss[e, :i + 1].mean():5.2e}"}
+                    if K > 2:
+                        postfix_dict |= {f"Dice-{k}": f"{log_dice[e, :j, k].mean():05.3f}"
+                                        for k in range(1, K)}
 
                     tq_iter.set_postfix(postfix_dict)
 
@@ -300,29 +280,13 @@ def runTraining(args):
         # I save it at each epochs, in case the code crashes or I decide to stop it early
         np.save(args.dest / "loss_tra.npy", log_loss_tra)
         np.save(args.dest / "dice_tra.npy", log_dice_tra)
-        # np.save(args.dest / "hausdorff_tra.npy", log_hausdorff_tra)
         np.save(args.dest / "loss_val.npy", log_loss_val)
         np.save(args.dest / "dice_val.npy", log_dice_val)
-        # np.save(args.dest / "hausdorff_val.npy", log_hausdorff_val)
 
-        # current_dice: float = log_dice_val[e, :, 1:].mean().item()
-        # if current_dice > best_dice:
-        #     print(f">>> Improved dice at epoch {e}: {best_dice:05.3f}->{current_dice:05.3f} DSC")
-        #     best_dice = current_dice
-        #     with open(args.dest / "best_epoch.txt", 'w') as f:
-        #             f.write(str(e))
-        
-        # Hausdorff
-        if args.opt_metric == 'hausdorff':
-            current_metric: float = log_hausdorff_val[e, :, :].mean().item()
-            is_better = current_metric < best_metric  # For Hausdorff, minimize
-        else:  # Dice
-            current_metric: float = log_dice_val[e, :, 1:].mean().item()
-            is_better = current_metric > best_metric  # For Dice, maximize
-
-        if is_better:
-            print(f">>> Improved {args.opt_metric} at epoch {e}: {best_metric:05.3f}->{current_metric:05.3f}")
-            best_metric = current_metric
+        current_dice: float = log_dice_val[e, :, 1:].mean().item()
+        if current_dice > best_dice:
+            print(f">>> Improved dice at epoch {e}: {best_dice:05.3f}->{current_dice:05.3f} DSC")
+            best_dice = current_dice
             with open(args.dest / "best_epoch.txt", 'w') as f:
                     f.write(str(e))
 
@@ -404,7 +368,6 @@ def runTest(args):
                              shuffle=False)
 
     log_dice_test: Tensor = torch.zeros((len(test_loader.dataset), K))
-    # log_hausdorff_test: Tensor = torch.zeros((len(test_loader.dataset), K))
 
     with torch.no_grad():
         j = 0
@@ -431,7 +394,6 @@ def runTest(args):
 
             j += img.size(0)
 
-            # Postfix logging for dice and hausdorff (in the future)
             postfix_dict: dict[str, str] = {"Dice": f"{log_dice_test[:j, 1:].mean():05.3f}"}
             tq_iter.set_postfix(postfix_dict)
 
@@ -462,8 +424,6 @@ def main():
     parser.add_argument('--debug', action='store_true',
                         help="Keep only a fraction (10 samples) of the datasets, "
                              "to test the logic around epochs and logging easily.")
-    parser.add_argument('--opt_metric', default='dice', choices=['dice', 'hausdorff'],
-                        help="Metric to optimize: 'dice' for Dice score or 'hausdorff' for Hausdorff distance.")
     parser.add_argument('--test', action='store_true',
                         help="Run the test phase after training on the SEGTHOR/test dataset.")
     parser.add_argument('--only_test', action='store_true', help="Run only the test phase without training.")
