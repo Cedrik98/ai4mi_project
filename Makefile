@@ -17,10 +17,18 @@ data/TOY2:
 
 
 # Extraction and slicing for Segthor
+<<<<<<< HEAD
 # data/segthor_train: data/segthor_train.zip
 # 	$(info $(yellow)unzip $<$(reset))
 # 	sha256sum -c data/segthor_train.sha256
 # 	unzip -q $<
+=======
+data/segthor_train: data/segthor_train.zip
+	$(info $(yellow)unzip $<$(reset))
+	sha256sum -c data/segthor_train.sha256
+	unzip -q $<
+	rm -f $@/.DS_STORE
+>>>>>>> 882a705e75e813eb165777aebfbc1a137000d8f0
 
 # Use with gaussian dataset + testset:
 data/SEGTHOR: data/segthor_train
