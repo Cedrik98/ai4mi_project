@@ -187,7 +187,14 @@ def runTraining(args):
                         
                     
                     # Validation
-                        
+                    if m == 'val':
+                        with warnings.catch_warnings():
+                            warnings.filterwarnings('ignore', category=UserWarning)
+                            predicted_class: Tensor = probs2class(pred_probs)
+                            mult: int = 63 if K == 5 else (255 / (K - 1))
+                            save_images(predicted_class * mult,
+                                        data['stems'],
+                                        args.dest / f"iter{e:03d}" / m)    
                         
                     j += B  # Keep in mind that _in theory_, each batch might have a different size
                     # For the DSC average: do not take the background class (0) into account:
