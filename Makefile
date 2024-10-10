@@ -31,7 +31,7 @@ data/SEGTHOR: data/segthor_train
 # ^^ retaining 19 because dataset size doubled from 35 to 75
 	mv $@_tmp $@
 
-# Use without gaussian dataset but with testset:
+# # Use without gaussian dataset but with testset:
 # data/SEGTHOR: data/segthor_train
 # 	$(info $(green)python $(CFLAGS) slice_segthor.py$(reset))
 # 	rm -rf $@_tmp $@

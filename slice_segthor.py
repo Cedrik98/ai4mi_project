@@ -166,6 +166,8 @@ def get_splits(src_path: Path, retains: int, fold: int, with_gaussian_dataset: b
 
         validation_slice = slice(fold * retains, (fold + 1) * retains)
         validation_ids: list[str] = remaining_ids[validation_slice]
+        print(validation_ids)
+        print(retains)
         assert len(validation_ids) == retains
 
         training_ids: list[str] = [e for e in remaining_ids if e not in validation_ids]

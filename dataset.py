@@ -70,6 +70,7 @@ class SliceDataset(Dataset):
 
         _, W, H = img.shape
         K, _, _ = gt.shape
+        
         assert gt.shape == (K, W, H)
 
         return {"images": img,
