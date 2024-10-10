@@ -30,13 +30,12 @@ data/TOY2:
 # 	unzip -q $<
 # 	rm -f $@/.DS_STORE
 
-# Use with gaussian dataset + testset:
+# Use with testset:
 # data/SEGTHOR: data/segthor_train
 # 	$(info $(green)python $(CFLAGS) slice_segthor.py$(reset))
 # 	rm -rf $@_tmp $@
 # 	python $(CFLAGS) slice_segthor.py --source_dir $^ --dest_dir $@_tmp \
-# 		--shape 256 256 --retain 19 --with_gaussian_dataset --test_mode
-# ^^ retaining 19 because dataset size doubled from 35 to 75
+# 		--shape 256 256 --retain 8 --test_mode
 # 	mv $@_tmp $@
 
 # Use without gaussian dataset but with testset:
@@ -44,5 +43,5 @@ data/SEGTHOR: data/segthor_train
 	$(info $(green)python $(CFLAGS) slice_segthor.py$(reset))
 	rm -rf $@_tmp $@
 	python $(CFLAGS) slice_segthor.py --source_dir $^ --dest_dir $@_tmp \
-		--shape 256 256 --retain 10 --process 6
+		--shape 256 256 --retains 7 --process 6 --test_mode
 	mv $@_tmp $@
