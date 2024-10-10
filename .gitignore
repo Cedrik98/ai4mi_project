@@ -10,3 +10,4 @@ grad_figs/*.png
 *.deb
 hausdorff.py
 Elastix_transformation.ipynb
+model/*
