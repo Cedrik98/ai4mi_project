@@ -1,5 +1,8 @@
 import numpy as np
 import SimpleITK as sitk
+import argparse
+from pathlib import Path
+import glob
 
 def load_nifti(file_path):
     return sitk.GetArrayFromImage(sitk.ReadImage(file_path))
@@ -13,9 +16,14 @@ def dice_score(gt, pred):
     else:
         return (2.0 * intersection) / union
 
-def calculate_dice_metrics(gt_file, pred_file, num_segments):
+def process_patient(gt_file, pred_file, num_segments):
+    print(f"Processing {gt_file} and {pred_file}")
+    
     gt = load_nifti(gt_file)
     pred = load_nifti(pred_file)
+    
+    # Normalize prediction values (when using their slicing code)
+    pred = (pred / 63).astype(int)
     
     # 3D Dice score 
     dice_3d = {}
@@ -44,12 +52,11 @@ def calculate_dice_metrics(gt_file, pred_file, num_segments):
         pred_all_slice = (pred_slice > 0).astype(int)
         overall_dice_2d.append(dice_score(gt_all_slice, pred_all_slice))
     
-    # Calculate oall segments combined)
+    # Calculate (all segments combined)
     gt_all = (gt > 0).astype(int)
     pred_all = (pred > 0).astype(int)
     overall_dice_3d = dice_score(gt_all, pred_all)
     
-
     print("3D Dice Scores (whole volume):")
     for label, score in dice_3d.items():
         print(f"  Segment {label}: {score:.4f}")
@@ -60,15 +67,62 @@ def calculate_dice_metrics(gt_file, pred_file, num_segments):
         avg_dice = np.mean(dice_2d[label])
         std_dice = np.std(dice_2d[label])
         print(f"  Segment {label}: Mean = {avg_dice:.4f}, Std = {std_dice:.4f}")
-    print()
     
-    print("Overall Dice Scores:")
+    print("\nOverall Dice Scores:")
     print(f"  3D (whole volume): {overall_dice_3d:.4f}")
     print(f"  2D (per slice): Mean = {np.mean(overall_dice_2d):.4f}, Std = {np.std(overall_dice_2d):.4f}")
+    
+    return overall_dice_3d, overall_dice_2d
+
+def compute_overall_dice_3d(dice_3d_scores):
+    """Compute the mean and std of the overall 3D Dice score across all patients."""
+    dice_array = np.array(dice_3d_scores)
+    mean_dice = np.mean(dice_array)
+    std_dice = np.std(dice_array)
+    print(f"\n\nOverall 3D Dice Score across all patients:")
+    print(f"  Mean = {mean_dice:.4f}, Std = {std_dice:.4f}")
+    return mean_dice, std_dice
+
+def compute_overall_dice_2d(dice_2d_scores):
+    """Compute the mean and std of the 2D Dice score across all patients."""
+    flattened_scores = [score for patient_scores in dice_2d_scores for score in patient_scores]
+    dice_array = np.array(flattened_scores)
+    mean_dice = np.mean(dice_array)
+    std_dice = np.std(dice_array)
+    print(f"Overall 2D Dice Score across all patients:")
+    print(f"  Mean = {mean_dice:.4f}, Std = {std_dice:.4f}")
+    return mean_dice, std_dice
+
+def main(args: argparse.Namespace):
+    pred_files = glob.glob(f"{args.pred_dir}/Patient_*.nii.gz")
+    
+    overall_dice_3d_list = []
+    overall_dice_2d_list = []
+
+    for pred_file in pred_files:
+        patient_filename = Path(pred_file).name
+        
+        patient_id = patient_filename.replace(".nii.gz", "")
+        
+        gt_file = Path(args.gt_dir) / patient_id / "GT_fixed.nii.gz"
+        
+        if gt_file.exists():
+            dice_3d, dice_2d = process_patient(gt_file, pred_file, args.num_segments)
+            overall_dice_3d_list.append(dice_3d)
+            overall_dice_2d_list.append(dice_2d)
+        else:
+            print(f"Warning: GT file {gt_file} not found, skipping.")
+    
+    compute_overall_dice_3d(overall_dice_3d_list)
+    compute_overall_dice_2d(overall_dice_2d_list)
+
+def get_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description='Dice calculation parameters')
+    parser.add_argument('--gt_dir', type=str, required=True, help="Directory containing GT files")
+    parser.add_argument('--pred_dir', type=str, required=True, help="Directory containing predicted files")
+    parser.add_argument('--num_segments', type=int, default=5, help="Number of segments (including background)")
+    args = parser.parse_args()
+    return args
 
 if __name__ == "__main__":
-    gt_file = "Nnunet_data_correct/nnUNet_raw/Dataset700_Segthor/labelsTr/Patient_40.nii.gz"
-    pred_file = "output_pp/Patient_40.nii.gz"
-    num_segments = 5  # Total number of segments including background
-    
-    calculate_dice_metrics(gt_file, pred_file, num_segments)
+    main(get_args())
