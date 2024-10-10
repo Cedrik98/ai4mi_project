@@ -9,4 +9,5 @@ __pycache__/
 grad_figs/*.png
 *.deb
 hausdorff.py
-Elastix_transformation.ipynb
+Elastix_transformation.ipynb/
+model/*
