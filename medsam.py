@@ -272,7 +272,7 @@ def main():
     parser = argparse.ArgumentParser()
     
     parser.add_argument('--epochs', default=200, type=int)
-    parser.add_argument('--dataset', default='TOY2', choices=['TOY2', 'SEGTHOR'])
+    parser.add_argument('--dataset', default='TOY2', choices=['TOY2', 'SEGTHOR', 'SEGTHOR_test'])
     parser.add_argument('--mode', default='full', choices=['partial', 'full'])
     parser.add_argument('--dest', type=Path, required=True,
                         help="Destination directory to save the results (predictions and weights).")
