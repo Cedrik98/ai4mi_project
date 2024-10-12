@@ -39,12 +39,11 @@ from torch.utils.data import DataLoader
 
 from dataset import SliceDataset
 
-from ShallowNet import shallowCNN
 from ENet import ENet
 from vmunet import VMUNet
 from vision_transformer import SwinUnet
 
-from ShallowNet import shallowCNN
+import subprocess
 
 from utils import (Dcm,
                    class2one_hot,
@@ -367,21 +366,13 @@ def runTest(args):
                              num_workers=args.num_workers,
                              shuffle=False)
 
-    log_dice_test: Tensor = torch.zeros((len(test_loader.dataset), K))
-
     with torch.no_grad():
-        j = 0
         tq_iter = tqdm_(enumerate(test_loader), total=len(test_loader), desc=">> Testing")
-        for i, data in tq_iter:
+        for _, data in tq_iter:
             img = data['images'].to(device)
-            gt = data['gts'].to(device)
 
             pred_logits = net(img)
             pred_probs = F.softmax(1 * pred_logits, dim=1)
-
-            # Metrics computation, not used for training
-            pred_seg = probs2one_hot(pred_probs)
-            log_dice_test[j:j + img.size(0), :] = dice_coef(pred_seg, gt)  # One DSC value per sample and per class
             
             # Save test predictions
             with warnings.catch_warnings():
@@ -391,24 +382,35 @@ def runTest(args):
                 save_images(predicted_class * mult,
                             data['stems'],
                             args.dest / "test_results")
-
-            j += img.size(0)
-
-            postfix_dict: dict[str, str] = {"Dice": f"{log_dice_test[:j, 1:].mean():05.3f}"}
-            tq_iter.set_postfix(postfix_dict)
-
-    # Calculate and print final Dice score over the entire test set
-    mean_dice_per_class = log_dice_test.mean(dim=0)
-    print(f"Final Dice scores for the test set:")
-    for k in range(1, K):
-        print(f"Class {k}: Dice = {mean_dice_per_class[k]:05.3f}")
     
-    mean_dice = mean_dice_per_class[1:].mean()  # Skip background class
-    print(f"Mean Dice score: {mean_dice:05.3f}")
+    # Stitch segmented slices back into 3D volumes using stitch.py
+    print(">>> Stitching slices back into 3D volumes...")
+    stitch_command = [
+        'python', 'stitch.py',
+        '--data_folder', str(args.dest / "test_results"),
+        '--dest_folder', str(args.dest / "stitched_volumes"),
+        '--num_classes', "255",
+        '--grp_regex', "(Patient_\\d\\d)_\\d\\d\\d\\d",
+        '--source_scan_pattern', f"data/segthor_train/train/{{id_}}/GT_fixed.nii.gz"
+    ]
+    subprocess.run(stitch_command)
+    print(f">> Saved stitched volumes to {args.dest}/test_results/stitched_volumes")
 
-    # Save test logs
-    np.save(args.dest / "dice_test.npy", log_dice_test)
-    print(f">>> Test completed. Results saved to {args.dest}.")
+    # Calculate Dice score in 2D and 3D using dice_calculation.py
+    print("\n>>> Calculating 2D and 3D Dice scores...")
+    pred_folder = args.dest / "stitched_volumes"
+    gt_folder = "data/segthor_train/train"
+
+    dice_command = [
+        'python', 'dice_calculation.py',
+        '--gt_dir', gt_folder,
+        '--pred_dir', pred_folder,
+        '--num_segments', str(K)
+    ]
+    subprocess.run(dice_command)
+
+    print(f">>> Test completed. Results saved to {args.dest}/test_results.")
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -424,9 +426,8 @@ def main():
     parser.add_argument('--debug', action='store_true',
                         help="Keep only a fraction (10 samples) of the datasets, "
                              "to test the logic around epochs and logging easily.")
-    parser.add_argument('--test', action='store_true',
-                        help="Run the test phase after training on the SEGTHOR/test dataset.")
-    parser.add_argument('--only_test', action='store_true', help="Run only the test phase without training.")
+    parser.add_argument('--only_test', action='store_true', help="Run only the test phase without training.\
+                        Make sure to stitch the results back together before testing")
     parser.add_argument('--transfer_learning', default=False, action='store_true')
     parser.add_argument('--pretrained_weights', default=False, action='store_true')
     parser.add_argument('--loss', default='CE', choices=['CE', 'Focal', 'Dice', 'CEDice', 'FocalDice'])
@@ -443,8 +444,6 @@ def main():
         runTest(args)
     else:
         runTraining(args)
-        if args.test:
-            runTest(args)
 
 
 if __name__ == '__main__':
