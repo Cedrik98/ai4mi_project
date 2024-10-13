@@ -43,5 +43,5 @@ data/SEGTHOR: data/segthor_train
 	$(info $(green)python $(CFLAGS) slice_segthor.py$(reset))
 	rm -rf $@_tmp $@
 	python $(CFLAGS) slice_segthor.py --source_dir $^ --dest_dir $@_tmp \
-		--shape 256 256 --retains 7 --process 6 --test_mode
+		--shape 256 256 --retains 10 --process 6 --test_mode
 	mv $@_tmp $@
