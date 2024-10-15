@@ -22,7 +22,10 @@ def dice_score_2d(gt, pred):
         dice_scores.append((2.0 * intersection) / union if union > 0 else 1.0)
     return np.mean(dice_scores)
 
-def compute_hausdorff(gt, pred):
+def voxel_to_mm(distance, spacing):
+    return distance * np.sqrt(np.sum(np.array(spacing)**2))
+
+def compute_hausdorff(gt, pred, spacing):
     labels_gt = np.unique(gt)
     labels_pred = np.unique(pred)
     
@@ -39,10 +42,14 @@ def compute_hausdorff(gt, pred):
             hausdorff_distances[int(label_gt)] = 0
             continue
 
+        # Calculate Hausdorff distance in voxel space
         hausdorff_distance_gt_to_pred = directed_hausdorff(coords_gt, coords_pred)[0]
         hausdorff_distance_pred_to_gt = directed_hausdorff(coords_pred, coords_gt)[0]
-    
-        hausdorff_distances[int(label_gt)] = max(hausdorff_distance_gt_to_pred, hausdorff_distance_pred_to_gt)
+        hausdorff_distance_voxel = max(hausdorff_distance_gt_to_pred, hausdorff_distance_pred_to_gt)
+        
+        # Convert to mm
+        hausdorff_distance_mm = voxel_to_mm(hausdorff_distance_voxel, spacing)
+        hausdorff_distances[int(label_gt)] = hausdorff_distance_mm
 
     return hausdorff_distances
 
@@ -65,7 +72,7 @@ def compute_volumetric(gt, pred, voxel_size):
 
     return vs_results
 
-def compute_average_surface_distance(gt, pred):
+def compute_average_surface_distance(gt, pred, spacing):
     labels_gt = np.unique(gt)
     labels_pred = np.unique(pred)
     
@@ -77,6 +84,10 @@ def compute_average_surface_distance(gt, pred):
     
         seg_gt_mask_img = sitk.GetImageFromArray(seg_gt_mask)
         seg_pred_mask_img = sitk.GetImageFromArray(seg_pred_mask)
+        
+        # Set the spacing for both images
+        seg_gt_mask_img.SetSpacing(spacing)
+        seg_pred_mask_img.SetSpacing(spacing)
     
         seg_gt_surface = sitk.LabelContour(seg_gt_mask_img)
         seg_pred_surface = sitk.LabelContour(seg_pred_mask_img)
@@ -84,7 +95,7 @@ def compute_average_surface_distance(gt, pred):
         surface_distance_filter = sitk.HausdorffDistanceImageFilter()
         surface_distance_filter.Execute(seg_gt_surface, seg_pred_surface)
         avg_distance = surface_distance_filter.GetAverageHausdorffDistance()
-        average_surface_distances[int(label_gt)] = avg_distance
+        average_surface_distances[int(label_gt)] = avg_distance  # This is already in mm
 
     return average_surface_distances
 
@@ -105,11 +116,12 @@ def recall(gt, pred):
 
 def calculate_metrics(gt_file, pred_file):
     print(f"Loading images...")
-    gt_img = load_nifti(gt_file) * 63
-    pred_img = load_nifti(pred_file) * 63
+    gt_img = load_nifti(gt_file)
+    pred_img = load_nifti(pred_file)
     gt = sitk.GetArrayFromImage(gt_img)
     pred = sitk.GetArrayFromImage(pred_img)
     voxel_size = np.prod(gt_img.GetSpacing())
+    spacing = gt_img.GetSpacing()
     print(f"Images loaded.")
     
     metrics = {
@@ -136,7 +148,7 @@ def calculate_metrics(gt_file, pred_file):
     print(f"Overall metrics calculated.")
     
     print(f"Calculating Hausdorff distance...")
-    hausdorff_distances = compute_hausdorff(gt, pred)
+    hausdorff_distances = compute_hausdorff(gt, pred, spacing)
     metrics["hausdorff_distance"] = hausdorff_distances
     metrics["overall"]["hausdorff_distance"] = np.mean(list(hausdorff_distances.values()))
     
@@ -146,7 +158,7 @@ def calculate_metrics(gt_file, pred_file):
     metrics["overall"]["volumetric_similarity"] = np.mean(list(volumetric_similarities.values()))
     
     print(f"Calculating average surface distance...")
-    average_surface_distances = compute_average_surface_distance(gt, pred)
+    average_surface_distances = compute_average_surface_distance(gt, pred, spacing)
     metrics["average_surface_distance"] = average_surface_distances
     metrics["overall"]["average_surface_distance"] = np.mean(list(average_surface_distances.values()))
     
@@ -233,7 +245,7 @@ def save_results_to_json(results, output_file):
 if __name__ == "__main__":
     gt_folder = "internal_test_set/gt"
     pred_folder = "internal_test_set/predictions"
-    output_file = "all_metrics/test.json"
+    output_file = "all_metrics_jsons/test.json"
     
     start_time = time.time()
     results = process_folder(gt_folder, pred_folder)
