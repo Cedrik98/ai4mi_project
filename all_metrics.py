@@ -28,24 +28,21 @@ def compute_hausdorff(gt, pred):
     
     hausdorff_distances = {}
 
-    for label in labels_gt:
-        if label == 0:
-            continue
-        
-        mask_gt = (gt == label).astype(int)
-        mask_pred = (pred == labels_pred[np.where(labels_gt == label)[0][0]]).astype(int)
+    for label_gt, label_pred in zip(labels_gt[labels_gt > 0], labels_pred[labels_pred > 0]):
+        mask_gt = (gt == label_gt).astype(int)
+        mask_pred = (pred == label_pred).astype(int)
         
         coords_gt = np.column_stack(np.where(mask_gt))
         coords_pred = np.column_stack(np.where(mask_pred))
 
         if len(coords_gt) == 0 or len(coords_pred) == 0:
-            hausdorff_distances[int(label)] = 0
+            hausdorff_distances[int(label_gt)] = 0
             continue
 
         hausdorff_distance_gt_to_pred = directed_hausdorff(coords_gt, coords_pred)[0]
         hausdorff_distance_pred_to_gt = directed_hausdorff(coords_pred, coords_gt)[0]
     
-        hausdorff_distances[int(label)] = max(hausdorff_distance_gt_to_pred, hausdorff_distance_pred_to_gt)
+        hausdorff_distances[int(label_gt)] = max(hausdorff_distance_gt_to_pred, hausdorff_distance_pred_to_gt)
 
     return hausdorff_distances
 
@@ -55,16 +52,16 @@ def compute_volumetric(gt, pred, voxel_size):
     
     vs_results = {}
     
-    for label in labels_gt:
-        volume_gt = np.sum(gt == label) * voxel_size
-        volume_pred = np.sum(pred == labels_pred[np.where(labels_gt == label)[0][0]]) * voxel_size
+    for label_gt, label_pred in zip(labels_gt, labels_pred):
+        volume_gt = np.sum(gt == label_gt) * voxel_size
+        volume_pred = np.sum(pred == label_pred) * voxel_size
     
         if volume_gt + volume_pred > 0:
             vs = 1 - abs(volume_gt - volume_pred) / (volume_gt + volume_pred)
         else:
             vs = 0
     
-        vs_results[int(label)] = vs
+        vs_results[int(label_gt)] = vs
 
     return vs_results
 
@@ -74,9 +71,9 @@ def compute_average_surface_distance(gt, pred):
     
     average_surface_distances = {}
     
-    for label in labels_gt[1:]:  # Skip background
-        seg_gt_mask = (gt == label).astype(np.uint8)
-        seg_pred_mask = (pred == labels_pred[np.where(labels_gt == label)[0][0]]).astype(np.uint8)
+    for label_gt, label_pred in zip(labels_gt[labels_gt > 0], labels_pred[labels_pred > 0]):
+        seg_gt_mask = (gt == label_gt).astype(np.uint8)
+        seg_pred_mask = (pred == label_pred).astype(np.uint8)
     
         seg_gt_mask_img = sitk.GetImageFromArray(seg_gt_mask)
         seg_pred_mask_img = sitk.GetImageFromArray(seg_pred_mask)
@@ -87,7 +84,7 @@ def compute_average_surface_distance(gt, pred):
         surface_distance_filter = sitk.HausdorffDistanceImageFilter()
         surface_distance_filter.Execute(seg_gt_surface, seg_pred_surface)
         avg_distance = surface_distance_filter.GetAverageHausdorffDistance()
-        average_surface_distances[int(label)] = avg_distance
+        average_surface_distances[int(label_gt)] = avg_distance
 
     return average_surface_distances
 
@@ -106,10 +103,10 @@ def recall(gt, pred):
     fn = np.sum((pred == 0) & (gt == 1))
     return tp / (tp + fn) if (tp + fn) > 0 else 0
 
-def calculate_metrics(gt_file, pred_file, num_segments):
+def calculate_metrics(gt_file, pred_file):
     print(f"Loading images...")
-    gt_img = load_nifti(gt_file)
-    pred_img = load_nifti(pred_file)
+    gt_img = load_nifti(gt_file) * 63
+    pred_img = load_nifti(pred_file) * 63
     gt = sitk.GetArrayFromImage(gt_img)
     pred = sitk.GetArrayFromImage(pred_img)
     voxel_size = np.prod(gt_img.GetSpacing())
@@ -153,24 +150,36 @@ def calculate_metrics(gt_file, pred_file, num_segments):
     metrics["average_surface_distance"] = average_surface_distances
     metrics["overall"]["average_surface_distance"] = np.mean(list(average_surface_distances.values()))
     
-    for label in range(1, num_segments):
-        print(f"Processing label {label}...")
-        gt_label = (gt == label).astype(int)
-        pred_label = (pred == label).astype(int)
+    labels_gt = np.unique(gt)
+    labels_pred = np.unique(pred)
+    
+    # Create a mapping from actual labels to output labels (bc someone multiplied by 63 or some shit)
+    label_mapping = {label: i+1 for i, label in enumerate(sorted(labels_gt[labels_gt > 0]))}
+    
+    for label_gt, label_pred in zip(labels_gt[labels_gt > 0], labels_pred[labels_pred > 0]):
+        print(f"Processing label {label_gt}...")
+        gt_label = (gt == label_gt).astype(int)
+        pred_label = (pred == label_pred).astype(int)
         
-        metrics["dice_score"][label] = dice_score(gt_label, pred_label)
-        metrics["dice_score_2d"][label] = dice_score_2d(gt_label, pred_label)
-        metrics["false_positive_rate"][label] = false_positive_rate(gt_label, pred_label)
-        metrics["false_negative_rate"][label] = false_negative_rate(gt_label, pred_label)
-        metrics["recall"][label] = recall(gt_label, pred_label)
+        output_label = label_mapping[label_gt]
+        metrics["dice_score"][output_label] = dice_score(gt_label, pred_label)
+        metrics["dice_score_2d"][output_label] = dice_score_2d(gt_label, pred_label)
+        metrics["false_positive_rate"][output_label] = false_positive_rate(gt_label, pred_label)
+        metrics["false_negative_rate"][output_label] = false_negative_rate(gt_label, pred_label)
+        metrics["recall"][output_label] = recall(gt_label, pred_label)
         
-        print(f"Label {label} processed.")
+        print(f"Label {label_gt} processed.")
+    
+    # Update the other metric dictionaries to use the new label mapping
+    metrics["hausdorff_distance"] = {label_mapping[k]: v for k, v in metrics["hausdorff_distance"].items()}
+    metrics["volumetric_similarity"] = {label_mapping[k]: v for k, v in metrics["volumetric_similarity"].items()}
+    metrics["average_surface_distance"] = {label_mapping[k]: v for k, v in metrics["average_surface_distance"].items()}
     
     print(f"All metrics calculated.")
     
     return metrics
 
-def process_folder(gt_folder, pred_folder, num_segments):
+def process_folder(gt_folder, pred_folder):
     gt_files = sorted(glob(os.path.join(gt_folder, "*.nii.gz")))
     pred_files = sorted(glob(os.path.join(pred_folder, "*.nii.gz")))
     
@@ -178,11 +187,11 @@ def process_folder(gt_folder, pred_folder, num_segments):
         raise ValueError("Number of ground truth and prediction files do not match")
     
     results = {"patients": {}, "average": {}}
-    
+
     for gt_file, pred_file in zip(gt_files, pred_files):
         patient_id = os.path.basename(gt_file).split('.')[0]
         print(f"Processing: {patient_id}")
-        results["patients"][patient_id] = calculate_metrics(gt_file, pred_file, num_segments)
+        results["patients"][patient_id] = calculate_metrics(gt_file, pred_file)
     
     print("Calculating average results...")
     results["average"]["overall"] = {}
@@ -192,7 +201,10 @@ def process_folder(gt_folder, pred_folder, num_segments):
     for metric in results["patients"][list(results["patients"].keys())[0]].keys():
         if metric != "overall":
             results["average"][metric] = {}
-            for label in range(1, num_segments):
+            all_labels = set()
+            for patient in results["patients"].values():
+                all_labels.update(patient[metric].keys())
+            for label in all_labels:
                 values = [patient[metric][label] for patient in results["patients"].values() if label in patient[metric]]
                 results["average"][metric][label] = np.mean(values) if values else None
     
@@ -221,11 +233,10 @@ def save_results_to_json(results, output_file):
 if __name__ == "__main__":
     gt_folder = "internal_test_set/gt"
     pred_folder = "internal_test_set/predictions"
-    num_segments = 5 
-    output_file = "all_metrics/nnunet.json"
+    output_file = "all_metrics/test.json"
     
     start_time = time.time()
-    results = process_folder(gt_folder, pred_folder, num_segments)
+    results = process_folder(gt_folder, pred_folder)
     save_results_to_json(results, output_file)
     print(f"Total processing time: {time.time() - start_time:.2f} seconds")
     print(f"Results saved to {output_file}")
