@@ -92,7 +92,7 @@ def _build_sam(
             mask_in_chans=16,
         ),
         mask_decoder=MaskDecoder(
-            num_multimask_outputs=5,
+            num_multimask_outputs=3,
             transformer=TwoWayTransformer(
                 depth=2,
                 embedding_dim=prompt_embed_dim,
@@ -142,14 +142,12 @@ def _build_sam(
     if checkpoint is not None:
         with open(checkpoint, "rb") as f:
             state_dict = torch.load(f, map_location=torch.device('cpu'))
-        
-        for key in state_dict.keys():
-            print(key)    
+  
         # state_dict = {k: v for k, v in state_dict.items() if not (
         #     k.startswith("mask_decoder.mask_tokens") or
         #     k.startswith("mask_decoder.iou_prediction_head.layers.2")
         # )}
-
+        sam.load_state_dict(state_dict)
         # missing_keys, unexpected_keys = sam.load_state_dict(state_dict, strict=False)
         # # Print out any missing or unexpected keys for debugging
         
@@ -157,5 +155,4 @@ def _build_sam(
         #     print(f"Missing keys: {missing_keys}")
         # if unexpected_keys:
         #     print(f"Unexpected keys: {unexpected_keys}")
-        print("finish")
     return sam
