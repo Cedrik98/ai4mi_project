@@ -25,14 +25,16 @@ from losses import DiceLoss, CrossEntropy, CEDiceLoss, FocalDiceLoss, FocalLoss
 from shutil import copytree, rmtree
 
 def initialize_new_layers(medsam_model):
+    nn.init.xavier_uniform_(medsam_model.mask_decoder.mask_tokens.weight)
 
-    nn.init.normal_(medsam_model.mask_decoder.mask_tokens.weight[-2:], mean=0, std=0.02)  
-    for i in range(4, 6):  
+    # Initialize missing layers for the output hypernetworks (indices 4 and 5)
+    for i in range(4, 6):
         for layer in medsam_model.mask_decoder.output_hypernetworks_mlps[i].layers:
             if isinstance(layer, nn.Linear):
                 nn.init.xavier_uniform_(layer.weight)
                 nn.init.zeros_(layer.bias)
 
+    # Initialize IOU prediction head layer (layer 2)
     nn.init.xavier_uniform_(medsam_model.mask_decoder.iou_prediction_head.layers[2].weight)
     nn.init.zeros_(medsam_model.mask_decoder.iou_prediction_head.layers[2].bias)
 
@@ -45,7 +47,7 @@ def setup(args):
     
     
     medsam_model = sam_model_registry['vit_b'](checkpoint=MedSAM_CKPT_PATH)
-    # initialize_new_layers(medsam_model)
+    initialize_new_layers(medsam_model)
     medsam_model = medsam_model.to(device)
     
     
@@ -169,6 +171,8 @@ def runTraining(args):
                     
                     # Metrics computation, not used for training
                     pred_seg = probs2one_hot(pred_probs)
+                    print(f"Shape of pred_seg: {pred_seg.shape}, Shape of gt: {gt.shape}")
+
                     log_dice[e, j:j + B, :] = dice_coef(pred_seg, gt)
                     
                     if args.loss == "Focal" or args.loss == "FocalDice":
