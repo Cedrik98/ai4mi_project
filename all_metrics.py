@@ -101,6 +101,11 @@ def false_negative_rate(gt, pred):
     tp = np.sum((pred == 1) & (gt == 1))
     return fn / (fn + tp) if (fn + tp) > 0 else 0
 
+def recall(gt, pred):
+    tp = np.sum((pred == 1) & (gt == 1))
+    fn = np.sum((pred == 0) & (gt == 1))
+    return tp / (tp + fn) if (tp + fn) > 0 else 0
+
 def calculate_metrics(gt_file, pred_file, num_segments):
     print(f"Loading images...")
     gt_img = load_nifti(gt_file)
@@ -117,7 +122,8 @@ def calculate_metrics(gt_file, pred_file, num_segments):
         "volumetric_similarity": {},
         "false_positive_rate": {},
         "false_negative_rate": {},
-        "average_surface_distance": {}
+        "average_surface_distance": {},
+        "recall": {}
     }
     
     print(f"Calculating overall metrics...")
@@ -127,7 +133,8 @@ def calculate_metrics(gt_file, pred_file, num_segments):
         "dice_score": dice_score(gt_all, pred_all),
         "dice_score_2d": dice_score_2d(gt_all, pred_all),
         "false_positive_rate": false_positive_rate(gt_all, pred_all),
-        "false_negative_rate": false_negative_rate(gt_all, pred_all)
+        "false_negative_rate": false_negative_rate(gt_all, pred_all),
+        "recall": recall(gt_all, pred_all)
     }
     print(f"Overall metrics calculated.")
     
@@ -155,6 +162,7 @@ def calculate_metrics(gt_file, pred_file, num_segments):
         metrics["dice_score_2d"][label] = dice_score_2d(gt_label, pred_label)
         metrics["false_positive_rate"][label] = false_positive_rate(gt_label, pred_label)
         metrics["false_negative_rate"][label] = false_negative_rate(gt_label, pred_label)
+        metrics["recall"][label] = recall(gt_label, pred_label)
         
         print(f"Label {label} processed.")
     
