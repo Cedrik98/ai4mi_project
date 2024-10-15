@@ -82,7 +82,7 @@ class FocalLoss():
 
         # Calculate modulating factor
         p_t = (pred_probs * pred_seg).sum(dim=1)
-        modulating_factor = (1 - p_t) ** self.gamma
+        modulating_factor = -(1 - p_t) ** self.gamma
 
         # Compute focal loss
         focal_loss = self.alpha * modulating_factor * ce_loss

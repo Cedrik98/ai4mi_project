@@ -9,3 +9,4 @@ matplotlib
 einops
 timm
 mamba-ssm
+seaborn

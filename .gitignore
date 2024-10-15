@@ -11,3 +11,4 @@ grad_figs/*.png
 hausdorff.py
 Elastix_transformation.ipynb
 model/*
+boxplots.ipynb
