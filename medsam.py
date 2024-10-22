@@ -193,7 +193,8 @@ def runTraining(args):
                     if args.loss == "Focal" or args.loss == "FocalDice":
                         loss = loss_fn(pred_probs, gt, pred_seg)
                     else:
-                        loss = loss_fn(pred_probs, gt)           
+                        loss = loss_fn(pred_probs, torch.argmax(gt, dim=1))
+     
                  
                     log_loss[e, i] = loss.item()
 
