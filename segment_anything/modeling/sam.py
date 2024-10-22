@@ -101,12 +101,17 @@ class Sam(nn.Module):
             [self.preprocess(x["image"]) for x in batched_input], dim=0
         )
         image_embeddings = self.image_encoder(input_images)
-
+       
         outputs = []
         for image_record, curr_embedding in zip(batched_input, image_embeddings):
+            
             if "point_coords" in image_record:
                 points = (image_record["point_coords"], image_record["point_labels"])
+                print("Don't use bounding box")
             else:
+                print("Use bounding box")
+                boxes = image_record.get("boxes", None)
+                print(boxes)
                 points = None
             sparse_embeddings, dense_embeddings = self.prompt_encoder(
                 points=points,

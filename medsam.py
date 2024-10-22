@@ -27,7 +27,8 @@ from shutil import copytree, rmtree
 def get_bounding_boxes(gt: Tensor) -> list[tuple[int, int, int, int]]:
     bounding_boxes = []
     for batch in gt:
-        for class_idx in range(1, batch.shape[0]):  # Skip the background class (index 0)
+        for class_idx in range(1, batch.shape[0]):  
+            print(class_idx)
             class_mask = batch[class_idx]
             non_zero_coords = torch.nonzero(class_mask)
             if len(non_zero_coords) > 0:
@@ -35,7 +36,7 @@ def get_bounding_boxes(gt: Tensor) -> list[tuple[int, int, int, int]]:
                 x_max, y_max = torch.max(non_zero_coords, dim=0)[0]
                 bounding_boxes.append((x_min.item(), y_min.item(), x_max.item(), y_max.item()))
             else:
-                bounding_boxes.append((0, 0, 0, 0))  # If no non-zero pixels are found
+                bounding_boxes.append((0, 0, 0, 0)) 
     return bounding_boxes
 
 
@@ -167,20 +168,21 @@ def runTraining(args):
                 for i, data in tq_iter:
                     img = data['images'].to(device)
                     gt = data['gts'].to(device)
+
                     bounding_boxes = get_bounding_boxes(gt)
 
                     # Sanity tests to see we loaded and encoded the data correctly
                     assert 0 <= img.min() and img.max() <= 1
                     B, _, W, H = img.shape
                     
-                    
                     original_sizes = [image.shape[1:] for image in img]  
                     # batched_input = [{"image": image, "original_size": original_size} for image, original_size in zip(img, original_sizes)]
-                    batched_input = [{"image": image, "original_size": original_size, "bounding_box": bbox}
+                    batched_input = [{"image": image, "original_size": original_size, "boxes": bbox}
                                      for image, original_size, bbox in zip(img, original_sizes, bounding_boxes)]
                     pred_logits = net(batched_input, multimask_output=True)
+                    print("finish")
                     low_res_logits = torch.stack([pred["low_res_logits"] for pred in pred_logits]) 
-     
+                    
                     low_res_logits = low_res_logits.squeeze(1)                  
                     pred_probs = F.softmax(1 * low_res_logits, dim=1)
                     
