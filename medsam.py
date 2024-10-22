@@ -67,8 +67,8 @@ def setup(args):
     medsam_model = medsam_model.to(device)
     
     
-    optimizer = torch.optim.Adam(medsam_model.parameters(), lr=args.lr)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100, eta_min=0.00001)
+    optimizer = torch.optim.Adam(medsam_model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=50, eta_min=0.000001)
     
     # Dataset part
     B: int = args.batch_size
@@ -312,7 +312,8 @@ def main():
     parser.add_argument('--batch_size', default=8, type=int)
     parser.add_argument('--classes', default=5, type=int)
     parser.add_argument('--lr', default=0.0001, type=float)
-    
+    parser.add_argument('--weight_decay', type=float, default=0.0001)
+
     args = parser.parse_args()
     
     if args.test:
