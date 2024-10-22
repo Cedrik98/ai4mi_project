@@ -107,11 +107,7 @@ class Sam(nn.Module):
             
             if "point_coords" in image_record:
                 points = (image_record["point_coords"], image_record["point_labels"])
-                print("Don't use bounding box")
             else:
-                print("Use bounding box")
-                boxes = image_record.get("boxes", None)
-                print(boxes)
                 points = None
             sparse_embeddings, dense_embeddings = self.prompt_encoder(
                 points=points,

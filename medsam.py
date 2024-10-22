@@ -28,7 +28,6 @@ def get_bounding_boxes(gt: Tensor) -> list[tuple[int, int, int, int]]:
     bounding_boxes = []
     for batch in gt:
         for class_idx in range(1, batch.shape[0]):  
-            print(class_idx)
             class_mask = batch[class_idx]
             non_zero_coords = torch.nonzero(class_mask)
             if len(non_zero_coords) > 0:
@@ -37,7 +36,7 @@ def get_bounding_boxes(gt: Tensor) -> list[tuple[int, int, int, int]]:
                 bounding_boxes.append((x_min.item(), y_min.item(), x_max.item(), y_max.item()))
             else:
                 bounding_boxes.append((0, 0, 0, 0)) 
-    return bounding_boxes
+    return torch.tensor(bounding_boxes, dtype=torch.float32) 
 
 
 
@@ -177,10 +176,10 @@ def runTraining(args):
                     
                     original_sizes = [image.shape[1:] for image in img]  
                     # batched_input = [{"image": image, "original_size": original_size} for image, original_size in zip(img, original_sizes)]
-                    batched_input = [{"image": image, "original_size": original_size, "boxes": bbox}
+                    batched_input = [{"image": image, "original_size": original_size, "boxes": bbox.unsqueeze(0)}
                                      for image, original_size, bbox in zip(img, original_sizes, bounding_boxes)]
                     pred_logits = net(batched_input, multimask_output=True)
-                    print("finish")
+
                     low_res_logits = torch.stack([pred["low_res_logits"] for pred in pred_logits]) 
                     
                     low_res_logits = low_res_logits.squeeze(1)                  
