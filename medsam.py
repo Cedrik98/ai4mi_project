@@ -64,7 +64,6 @@ def setup(args):
     
     medsam_model = sam_model_registry['vit_b'](checkpoint=MedSAM_CKPT_PATH)
     initialize_new_layers(medsam_model)
-    medsam_model = torch.nn.DataParallel(medsam_model)  
     medsam_model = medsam_model.to(device)
     
     
