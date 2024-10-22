@@ -64,6 +64,7 @@ def setup(args):
     
     medsam_model = sam_model_registry['vit_b'](checkpoint=MedSAM_CKPT_PATH)
     initialize_new_layers(medsam_model)
+    medsam_model = torch.nn.DataParallel(medsam_model)  
     medsam_model = medsam_model.to(device)
     
     
@@ -116,8 +117,7 @@ def setup(args):
 def runTraining(args):
     print(f">>> Setting up to train MedSAM on {args.dataset}")
     net, optimizer, scheduler, device, train_loader, val_loader, K = setup(args)
-    for name, param in net.named_parameters():
-        print(name, param.requires_grad)
+
     if args.loss == "CE":
         loss_fn = CrossEntropy(idk=list(range(K)))
     if args.loss == "Dice":
@@ -312,7 +312,7 @@ def main():
     parser.add_argument('--model', default='ENet', choices=['ENet','VMUNet','SwinUnet'])
     parser.add_argument('--batch_size', default=8, type=int)
     parser.add_argument('--classes', default=5, type=int)
-    parser.add_argument('--lr', default=0.00001, type=float)
+    parser.add_argument('--lr', default=0.0001, type=float)
     
     args = parser.parse_args()
     
