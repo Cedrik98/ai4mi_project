@@ -168,7 +168,7 @@ def runTraining(args):
                     img = data['images'].to(device)
                     gt = data['gts'].to(device)
 
-                    bounding_boxes = get_bounding_boxes(gt)
+                    bounding_boxes = get_bounding_boxes(gt).to(device)
 
                     # Sanity tests to see we loaded and encoded the data correctly
                     assert 0 <= img.min() and img.max() <= 1
