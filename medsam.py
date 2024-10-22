@@ -116,7 +116,7 @@ def setup(args):
 def runTraining(args):
     print(f">>> Setting up to train MedSAM on {args.dataset}")
     net, optimizer, scheduler, device, train_loader, val_loader, K = setup(args)
-    class_weights = torch.tensor([0.1, 5.0, 1.0, 5.0, 2.0])
+    class_weights = torch.tensor([0.1, 5.0, 1.0, 5.0, 2.0]).to(device)
     if args.loss == "CE":
         # loss_fn = CrossEntropy(idk=list(range(K)))
         loss_fn = nn.CrossEntropyLoss(weight=class_weights)
