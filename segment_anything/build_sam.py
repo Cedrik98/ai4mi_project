@@ -142,23 +142,15 @@ def _build_sam(
     if checkpoint is not None:
         with open(checkpoint, "rb") as f:
             state_dict = torch.load(f, map_location=torch.device('cpu'))
-  
-        # state_dict = {k: v for k, v in state_dict.items() if not (
-        #     k.startswith("mask_decoder.mask_tokens") or
-        #     k.startswith("mask_decoder.iou_prediction_head.layers.2")
-        # )}
-        for key in state_dict.keys():
-            print(key) 
+            
         filtered_state_dict = {k: v for k, v in state_dict.items() if not (
             k.startswith("mask_decoder.mask_tokens.weight") or
             k.startswith("mask_decoder.iou_prediction_head.layers.2.weight") or
             k.startswith("mask_decoder.iou_prediction_head.layers.2.bias")
         )}
 
-        # sam.load_state_dict(state_dict)
         missing_keys, unexpected_keys = sam.load_state_dict(filtered_state_dict, strict=False)
-        # # Print out any missing or unexpected keys for debugging
-        
+
         if missing_keys:
             print(f"Missing keys: {missing_keys}")
         if unexpected_keys:
