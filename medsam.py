@@ -168,7 +168,7 @@ def runTraining(args):
                     img = data['images'].to(device)
                     gt = data['gts'].to(device)
                     bounding_boxes = get_bounding_boxes(gt)
-                    print(bounding_boxes)
+
                     # Sanity tests to see we loaded and encoded the data correctly
                     assert 0 <= img.min() and img.max() <= 1
                     B, _, W, H = img.shape
@@ -179,7 +179,6 @@ def runTraining(args):
                     batched_input = [{"image": image, "original_size": original_size, "bounding_box": bbox}
                                      for image, original_size, bbox in zip(img, original_sizes, bounding_boxes)]
                     pred_logits = net(batched_input, multimask_output=True)
-                    print("a")
                     low_res_logits = torch.stack([pred["low_res_logits"] for pred in pred_logits]) 
      
                     low_res_logits = low_res_logits.squeeze(1)                  
