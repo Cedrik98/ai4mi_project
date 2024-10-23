@@ -80,7 +80,7 @@ def plot_boxplots(df, output_folder):
 json_folder = 'all_metrics'  
 output_folder = 'plots' 
 metrics_to_plot = ['dice_score', 'hausdorff_distance', 'average_surface_distance', 'volumetric_similarity', 'false_negative_rate']  
-models_to_compare = ['ce', 'fd', 'nnunet']  
+models_to_compare = ['ce_base', 'ce_rotated' ,'ce_elastic', 'ce_gaussian', 'ce_threshold']  
 
 # Ensure output folder exists
 os.makedirs(output_folder, exist_ok=True)
