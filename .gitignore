@@ -12,3 +12,4 @@ hausdorff.py
 Elastix_transformation.ipynb
 model/*
 boxplots.ipynb
+all_metrics/*
