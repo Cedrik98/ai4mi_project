@@ -75,17 +75,19 @@ class FocalLoss():
         self.alpha = kwargs['alpha']
         self.gamma = kwargs['gamma']
         self.idk = kwargs['idk']
-        self.ce_loss_func = CrossEntropy(idk=self.idk)
 
     def __call__(self, pred_probs, target, pred_seg):
-        ce_loss = self.ce_loss_func(pred_probs, target)
+        assert pred_probs.shape == target.shape
+        
+        p_t = (pred_probs * target).sum(dim=1)  
 
-        # Calculate modulating factor
-        p_t = (pred_probs * pred_seg).sum(dim=1)
-        modulating_factor = -(1 - p_t) ** self.gamma
+        # log(p_t), cross-entropy 
+        log_p_t = (p_t + 1e-10).log()
 
-        # Compute focal loss
-        focal_loss = self.alpha * modulating_factor * ce_loss
+        # modulating factor
+        modulating_factor = (1 - p_t) ** self.gamma
+
+        focal_loss = -self.alpha * modulating_factor * log_p_t
 
         return focal_loss.mean()
 

@@ -1,4 +1,5 @@
-# coding=utf-8
+# Code from the SwinUnet GitHub: https://github.com/HuCaoFighting/Swin-Unet
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -86,6 +87,7 @@ class SwinUnet(nn.Module):
         else:
             print("none pretrain")
  
+    # Custom function to allow for transfer learning.
     def setup_transfer_learning_swin(self):
         # Freeze the entire network
         for param in self.swin_unet.parameters():

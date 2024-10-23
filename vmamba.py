@@ -1,4 +1,4 @@
-# Code from the VM-Unet GitHub.
+# Code from the VM-Unet GitHub: https://github.com/JCruan519/VM-UNet
 
 import time
 import math

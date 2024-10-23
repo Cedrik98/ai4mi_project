@@ -1,4 +1,4 @@
-# Code from the VM-Unet GitHub.
+# Code from the VM-Unet GitHub: https://github.com/JCruan519/VM-UNet
 
 from vmamba import VSSM
 import torch
@@ -76,7 +76,7 @@ class VMUNet(nn.Module):
             print('Not loaded keys:', not_loaded_keys)
             print("decoder loaded finished!")
 
-
+    # Custom function to allow for transfer learning.
     def setup_transfer_learning_vmunet(self):
         # Freeze all layers by default
         for param in self.vmunet.parameters():
