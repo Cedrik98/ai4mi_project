@@ -1,0 +1,17 @@
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=18
+#SBATCH --gpus=1
+#SBATCH --partition=gpu
+#SBATCH --time=02:00:00
+ 
+
+# set path !
+
+export nnUNet_raw="path/to/nnUNet_raw"
+export nnUNet_preprocessed="path/to/nnUNet_preprocessed"
+export nnUNet_results="path/to/nnUNet_results"
+
+# run preprocess 
+srun nnUNetv2_plan_and_preprocess -d 900 --verify_dataset_integrity
