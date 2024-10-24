@@ -39,6 +39,11 @@ options:
   --model {ENet, VMUNet, SwinUnet}
 $ python -O main.py --dataset SETHOR --mode full --epoch 100 --dest results/segthor/FocalDice --gpu --loss FocalDice
 ```
+### Using pretrained weights for VMUNet/SwinUnet
+Pretrained models are available for VMUNet and SwinUnet, to use these models, create an enmpty directory "pretrained_ckpt" in the ai4mi_project directory.
+In the pretrained_ckpt directory, add the pth files.
+Pretrained SwinUnet model (swin_tiny_patch4_window7_224.pth): https://drive.google.com/drive/folders/1UC3XOoezeum0uck4KBVGa8osahs6rKUY
+Pretrained VMUNet model (vmamba_tiny_e292.pth): https://drive.google.com/drive/folders/1Fr7zM1wq7106d0P7_3oeU5UZqUvk2KaP
 
 ### Viewing the results
 #### utils/Visualize_confusion_metrics.ipynb
