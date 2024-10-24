@@ -16,6 +16,7 @@ This notebook is to create the 4 data augmentation techniques we have implemente
 
 ### Models implemented
 #### nnUNet
+nnUNet needs to be installed and run using the the instruction on the nnUNet Github page (https://github.com/MIC-DKFZ/nnUNet/blob/master/). Use the nnUNet_data_structure_conversion.py in model_utils to convert the dataset to the right structure for nnUNet to work with it. The jobs used to do preprocessing, training and inference for nnUNet can be found in the nnUNet_jobs folder. 
 #### Swin-UNet
 #### VMUNet
 
