@@ -19,10 +19,12 @@ This notebook is to create the 4 data augmentation techniques we have implemente
 nnUNet needs to be installed and run using the the instruction on the nnUNet Github page (https://github.com/MIC-DKFZ/nnUNet/blob/master/). Use the nnUNet_data_structure_conversion.py in model_utils to convert the dataset to the right structure for nnUNet to work with it. The jobs used to do preprocessing, training and inference for nnUNet can be found in the nnUNet_jobs folder. 
 #### Swin-UNet
 The code for the SwinUnet architecture can be found in the model_utils directory. "vision_transformer.py" and "swin_transformer_unet_skip_expand_decoder_sys.py"  files contain the SwinUnet architecture and building blocks respectively. 
+
 Both files originate from: https://github.com/HuCaoFighting/Swin-Unet.
 
 #### VMUNet
 The code for the VMUNet architecture can also be found in the model_utils directory. "vmunet.py" and "vmamba.py" contain the VMUNet architecture and building blocks respectively.
+
 Both files originate from: https://github.com/JCruan519/VM-UNet
 
 ### Running a training
