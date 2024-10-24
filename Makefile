@@ -17,31 +17,30 @@ data/TOY2:
 
 
 # Extraction and slicing for Segthor
-# data/segthor_train: data/segthor_train.zip
-# 	$(info $(yellow)unzip $<$(reset))
-# 	sha256sum -c data/segthor_train.sha256
-# 	unzip -q $<
-# 	rm -f $@/.DS_STORE
+data/segthor_train: data/segthor_train.zip
+	$(info $(yellow)unzip $<$(reset))
+	sha256sum -c data/segthor_train.sha256
+	unzip -q $<
+	rm -f $@/.DS_STORE
 
 # Extraction and slicing for test
-# data/segthor_train: data/test.zip
-# 	$(info $(yellow)unzip $<$(reset))
-# 	sha256sum -c data/test.zip.sha256
-# 	unzip -q $<
-# 	rm -f $@/.DS_STORE
+data/segthor_train: data/test.zip
+	$(info $(yellow)unzip $<$(reset))
+	sha256sum -c data/test.zip.sha256
+	unzip -q $<
+	rm -f $@/.DS_STORE
 
-# Use with testset:
-# data/SEGTHOR: data/segthor_train
-# 	$(info $(green)python $(CFLAGS) slice_segthor.py$(reset))
-# 	rm -rf $@_tmp $@
-# 	python $(CFLAGS) slice_segthor.py --source_dir $^ --dest_dir $@_tmp \
-# 		--shape 256 256 --retain 8 --test_mode
-# 	mv $@_tmp $@
-
-# Use without gaussian dataset but with testset:
 data/SEGTHOR: data/segthor_train
 	$(info $(green)python $(CFLAGS) slice_segthor.py$(reset))
 	rm -rf $@_tmp $@
 	python $(CFLAGS) slice_segthor.py --source_dir $^ --dest_dir $@_tmp \
-		--shape 256 256 --retains 10 --process 6 --test_mode
+		--shape 256 256 --retain 10
 	mv $@_tmp $@
+
+# Use to create testset:
+# data/SEGTHOR: data/segthor_train
+# 	$(info $(green)python $(CFLAGS) slice_segthor.py$(reset))
+# 	rm -rf $@_tmp $@
+# 	python $(CFLAGS) slice_segthor.py --source_dir $^ --dest_dir $@_tmp \
+# 		--shape 256 256 --retains 7 --process 6 --test_mode
+# 	mv $@_tmp $@

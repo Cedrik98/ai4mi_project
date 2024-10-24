@@ -4,7 +4,6 @@ import os
 from glob import glob
 import json
 from scipy.spatial.distance import directed_hausdorff
-import time
 
 def load_nifti(file_path):
     return sitk.ReadImage(file_path)
@@ -47,7 +46,7 @@ def compute_hausdorff(gt, pred, spacing):
         hausdorff_distance_pred_to_gt = directed_hausdorff(coords_pred, coords_gt)[0]
         hausdorff_distance_voxel = max(hausdorff_distance_gt_to_pred, hausdorff_distance_pred_to_gt)
         
-        # Convert to mm
+        # Convert to millimeters 
         hausdorff_distance_mm = voxel_to_mm(hausdorff_distance_voxel, spacing)
         hausdorff_distances[int(label_gt)] = hausdorff_distance_mm
 
@@ -165,7 +164,7 @@ def calculate_metrics(gt_file, pred_file):
     labels_gt = np.unique(gt)
     labels_pred = np.unique(pred)
     
-    # Create a mapping from actual labels to output labels (bc someone multiplied by 63 or some shit)
+    # Create a mapping from actual labels to output labels
     label_mapping = {label: i+1 for i, label in enumerate(sorted(labels_gt[labels_gt > 0]))}
     
     for label_gt, label_pred in zip(labels_gt[labels_gt > 0], labels_pred[labels_pred > 0]):
@@ -243,12 +242,12 @@ def save_results_to_json(results, output_file):
         json.dump(serializable_results, f, indent=2)
 
 if __name__ == "__main__":
+    # Created test set of 5 patients as Nifti files
     gt_folder = "internal_test_set/gt"
-    pred_folder = "internal_test_set/predictions"
-    output_file = "all_metrics_jsons/test.json"
+    # Change {model} with name of folder of trained model
+    pred_folder = "results/segthor/{model}/predictions"
+    output_file = "results/segthor/all_metrics_jsons/{model}.json"
     
-    start_time = time.time()
     results = process_folder(gt_folder, pred_folder)
     save_results_to_json(results, output_file)
-    print(f"Total processing time: {time.time() - start_time:.2f} seconds")
     print(f"Results saved to {output_file}")

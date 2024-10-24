@@ -1,9 +1,8 @@
 # Code from the VM-Unet GitHub: https://github.com/JCruan519/VM-UNet
 
-import time
 import math
 from functools import partial
-from typing import Optional, Callable
+from typing import Callable
 
 import torch
 import torch.nn as nn

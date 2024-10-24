@@ -1,5 +1,4 @@
 import json
-import math
 from statistics import mean, stdev
 import os
 
@@ -36,8 +35,8 @@ def calculate_metrics_for_all_json(directory):
                 print(f"  Standard deviation: {result['std']}")
             print("\n")  
 
-# Specify the directory containing all the JSON files
-directory = 'all_metrics'
+# Specify the directory containing all the JSON files outputted by all_metrics.py
+directory = 'results/segthor/all_metrics'
 
 # Process each JSON file in the folder
 calculate_metrics_for_all_json(directory)

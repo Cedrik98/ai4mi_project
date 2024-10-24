@@ -42,10 +42,8 @@ def get_z(image: Path) -> int:
 
 def merge_patient(id_: str, dest_folder: str, images: list[Path],
                   idxes: list[int], K: int, source_pattern: str) -> None:
-    # print(source_pattern.format(id_=id_))
     orig_nib = nib.load(source_pattern.format(id_=id_))
     orig_shape = np.asarray(orig_nib.dataobj).shape
-    # print(orig_nib.affine)
 
     X, Y, Z = orig_shape
     assert Z == len(idxes)
@@ -102,7 +100,6 @@ def main(args) -> None:
 
     for p in tqdm_(unique_patients):
         merge_patient(p, args.dest_folder, images, idx_map[p], args.num_classes, args.source_scan_pattern)
-    # mmap_(lambda p: merge_patient(p, args.dest_folder, images, idx_map[p], K=args.num_classes), patients)
 
 
 def get_args() -> argparse.Namespace:

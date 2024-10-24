@@ -31,12 +31,11 @@ def create_dataframe(model_data):
     return pd.DataFrame(all_results)
 
 def plot_boxplots(df, output_folder):
-    # Custom color palette
     colors = ["#FF9999", "#66B2FF", "#99FF99", "#FFCC99"]
     cmap = LinearSegmentedColormap.from_list("custom", colors, N=len(models_to_compare))
 
     for metric in metrics_to_plot:
-        fig, ax = plt.subplots(figsize=(12, 8))
+        _, ax = plt.subplots(figsize=(12, 8))
         
         # Create boxplot
         sns.boxplot(x='Model', y='Value', data=df[df['Metric'] == metric], 
@@ -53,18 +52,13 @@ def plot_boxplots(df, output_folder):
         # Add a grid for better readability
         ax.yaxis.grid(True, linestyle='--', which='major', color='grey', alpha=.25)
         
-        # Remove top and right spines
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
-        
-        # Increase the linewidth of the left and bottom spines
         ax.spines['left'].set_linewidth(1.5)
         ax.spines['bottom'].set_linewidth(1.5)
 
-        # Add subtle background color
         ax.set_facecolor('#F8F8F8')
         
-        # Add value labels on top of each box
         medians = df[df['Metric'] == metric].groupby('Model')['Value'].median()
         vertical_offset = df[df['Metric'] == metric]['Value'].max() * 0.01  # offset for median labels
 
@@ -76,9 +70,9 @@ def plot_boxplots(df, output_folder):
         plt.savefig(os.path.join(output_folder, f'{metric}_comparison.png'), dpi=300, bbox_inches='tight')
         plt.close()
 
-# Configuration
-json_folder = 'all_metrics'  
-output_folder = 'plots' 
+# Folder where json files are saved
+json_folder = 'results/segthor/all_metrics'  
+output_folder = 'results/segthor/plots' 
 metrics_to_plot = ['dice_score', 'hausdorff_distance', 'average_surface_distance', 'volumetric_similarity', 'false_negative_rate']  
 models_to_compare = ['ce_base', 'ce_rotated' ,'ce_elastic', 'ce_gaussian', 'ce_threshold']  
 
@@ -94,10 +88,6 @@ for model in models_to_compare:
     else:
         print(f"Warning: JSON file for {model} not found.")
 
-# Create DataFrame
 df = create_dataframe(model_data)
-
-# Create plots
 plot_boxplots(df, output_folder)
-
 print(f"Plots saved in {output_folder}")

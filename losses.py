@@ -81,7 +81,7 @@ class FocalLoss():
         
         p_t = (pred_probs * target).sum(dim=1)  
 
-        # log(p_t), cross-entropy 
+        # Cross-entropy 
         log_p_t = (p_t + 1e-10).log()
 
         # modulating factor
@@ -101,13 +101,9 @@ class CEDiceLoss():
         self.ce_weight = kwargs['ce_weight']
 
     def __call__(self, pred_probs, target):
-        # Calculate Dice loss
         dice_loss = self.dice_loss_func(pred_probs, target)
-
-        # Calculate Cross-Entropy loss
         ce_loss = self.ce_loss_func(pred_probs, target)
 
-        # Combine the two losses
         combined_loss = self.dice_weight * dice_loss + self.ce_weight * ce_loss
 
         return combined_loss
@@ -122,13 +118,9 @@ class FocalDiceLoss():
         self.focal_weight = kwargs['focal_weight']
 
     def __call__(self, pred_probs, target, pred_seg):
-        # Calculate Dice loss
         dice_loss = self.dice_loss_func(pred_probs, target)
-
-        # Calculate Focal loss
         focal_loss = self.focal_loss_func(pred_probs, target, pred_seg)
 
-        # Combine the two losses
         combined_loss = self.dice_weight * dice_loss + self.focal_weight * focal_loss
 
         return combined_loss

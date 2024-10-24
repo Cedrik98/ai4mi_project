@@ -40,8 +40,8 @@ from torch.utils.data import DataLoader
 from dataset import SliceDataset
 
 from ENet import ENet
-from vmunet import VMUNet
-from vision_transformer import SwinUnet
+from model_utils.vmunet import VMUNet
+from model_utils.vision_transformer import SwinUnet
 
 import subprocess
 
@@ -172,15 +172,13 @@ def runTraining(args):
     print(f">>> Setting up to train on {args.dataset} with {args.mode}")
     net, optimizer, scheduler, device, train_loader, val_loader, K = setup(args)
 
-    # if args.mode == "full":
-    #     ce_loss = CrossEntropy(idk=list(range(K)))  # Supervise both background and foreground
-    # elif args.mode in ["partial"] and args.dataset in ['SEGTHOR', 'SEGTHOR_STUDENTS']:
-    #     ce_loss = CrossEntropy(idk=[0, 1, 3, 4])  # Do not supervise the heart (class 2)
-    # else:
-    #     raise ValueError(args.mode, args.dataset)
-
     if args.loss == "CE":
-        loss_fn = CrossEntropy(idk=list(range(K)))
+        if args.mode == "full":
+            loss_fn = CrossEntropy(idk=list(range(K)))  # Supervise both background and foreground
+        elif args.mode in ["partial"] and args.dataset in ['SEGTHOR', 'SEGTHOR_STUDENTS']:
+            loss_fn = CrossEntropy(idk=[0, 1, 3, 4])  # Do not supervise the heart (class 2)
+        else:
+            raise ValueError(args.mode, args.dataset)
     if args.loss == "Dice":
         loss_fn = DiceLoss(smooth=1) 
     if args.loss == "Focal":
@@ -236,18 +234,12 @@ def runTraining(args):
                     pred_seg = probs2one_hot(pred_probs)
                     log_dice[e, j:j + B, :] = dice_coef(gt, pred_seg)  # One DSC value per sample and per class
 
-                    # loss = loss_fn(pred_probs, gt)
-                    # log_loss[e, i] = loss.item()  # One loss value per batch (averaged in the loss)
-
-                    # If Enet is used, only use CE loss.
                     if args.loss == "Focal" or args.loss == "FocalDice":
                         loss = loss_fn(pred_probs, gt, pred_seg)
                     else:
                         loss = loss_fn(pred_probs, gt)           
 
-
                     log_loss[e, i] = loss.item()  # One loss value per batch (averaged in the loss)
-
 
                     if opt:  # Only for training
                         opt.zero_grad()
@@ -298,6 +290,9 @@ def runTraining(args):
             torch.save(net.state_dict(), args.dest / "bestweights.pt")
 
 def runTest(args):
+    """Run a segmentation test on the specified dataset using the best trained model. 
+    Also creates segmentations from patients in test set"""
+    
     print(f">>> Running test on {args.dataset} using the best model.")
 
     # Load the best model saved during training
@@ -402,7 +397,7 @@ def runTest(args):
     gt_folder = "data/segthor_train/train"
 
     dice_command = [
-        'python', 'dice_calculation.py',
+        'python', 'utils/dice_calculation.py',
         '--gt_dir', gt_folder,
         '--pred_dir', pred_folder,
         '--num_segments', str(K)
@@ -426,12 +421,11 @@ def main():
     parser.add_argument('--debug', action='store_true',
                         help="Keep only a fraction (10 samples) of the datasets, "
                              "to test the logic around epochs and logging easily.")
-    parser.add_argument('--only_test', action='store_true', help="Run only the test phase without training.\
-                        Make sure to stitch the results back together before testing")
+    parser.add_argument('--only_test', action='store_true', help="Run only the test phase without training.")
     parser.add_argument('--transfer_learning', default=False, action='store_true')
     parser.add_argument('--pretrained_weights', default=False, action='store_true')
     parser.add_argument('--loss', default='CE', choices=['CE', 'Focal', 'Dice', 'CEDice', 'FocalDice'])
-    parser.add_argument('--model', default='ENet', choices=['ENet','VMUNet','SwinUnet'])
+    parser.add_argument('--model', default='ENet', choices=['ENet', 'VMUNet', 'SwinUnet'])
     parser.add_argument('--batch_size', default=8, type=int)
     parser.add_argument('--classes', default=5, type=int)
     parser.add_argument('--lr', default=0.0001, type=float)

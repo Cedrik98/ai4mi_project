@@ -1,6 +1,6 @@
 # Code from the VM-Unet GitHub: https://github.com/JCruan519/VM-UNet
 
-from vmamba import VSSM
+from model_utils.vmamba import VSSM
 import torch
 from torch import nn
 

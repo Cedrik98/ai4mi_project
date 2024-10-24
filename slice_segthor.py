@@ -55,8 +55,8 @@ def norm_arr(img: np.ndarray) -> np.ndarray:
 
 def sanity_ct(ct, x, y, z, dx, dy, dz) -> bool:
     assert ct.dtype in [np.int16, np.int32, np.float64], ct.dtype
-    # Commented out due to precision of float64 required while applying Gaussian filter to data
-    # results in ct.min() to be very slightly below -1000
+    # added np.float64 due to precision of float64 required while applying Gaussian filter to data
+    # and results in ct.min() to be very slightly below -1000
     # assert -1000 <= ct.min(), ct.min()
     assert ct.max() <= 31743, ct.max()
 
@@ -86,14 +86,12 @@ resize_: Callable = partial(resize, mode="constant", preserve_range=True, anti_a
 
 def slice_patient(id_: str, dest_path: Path, source_path: Path, shape: tuple[int, int],
                   test_mode: bool = False) -> tuple[float, float, float]:
-    # id_path: Path = source_path / ("train" if not test_mode else "test") / id_
     id_path: Path = source_path / "train" / id_
 
     # Load CT image
     ct_path: Path = id_path / f"{id_}.nii.gz"
     nib_obj = nib.load(str(ct_path))
     ct: np.ndarray = np.asarray(nib_obj.dataobj)
-    # dx, dy, dz = nib_obj.header.get_zooms()
     x, y, z = ct.shape
     dx, dy, dz = nib_obj.header.get_zooms()
 
@@ -109,10 +107,10 @@ def slice_patient(id_: str, dest_path: Path, source_path: Path, shape: tuple[int
             gt_path: Path = id_path / "GT.nii.gz"
 
         gt_nib = nib.load(str(gt_path))
-        # print(nib_obj.affine, gt_nib.affine)
         gt = np.asarray(gt_nib.dataobj)
 
-        # Apply transformation only if the patient is from original dataset
+        # Apply transformation only if the patient is from original dataset, patients 40 and below
+        # new from data augmentations are 41 and above
         if patient_number <= 40:
             heart_segment = (gt == 2).astype(np.uint8)
             heart_segment_transformed = scipy.ndimage.affine_transform(heart_segment, INV, order=0)
@@ -139,7 +137,6 @@ def slice_patient(id_: str, dest_path: Path, source_path: Path, shape: tuple[int
         assert img_slice.shape == gt_slice.shape
         gt_slice *= 63
         assert gt_slice.dtype == np.uint8, gt_slice.dtype
-        # assert set(np.unique(gt_slice)) <= set(range(5))
         assert set(np.unique(gt_slice)) <= set([0, 63, 126, 189, 252]), np.unique(gt_slice)
 
         arrays: list[np.ndarray] = [img_slice, gt_slice]
@@ -175,10 +172,10 @@ def get_splits(src_path: Path, retains: int, fold: int, test_mode: bool = False)
         remaining_ids = [str(id_) for id_ in ids if str(id_) not in test_ids]
     else:
         remaining_ids = ids[:]
-        # test_ids: list[str] = sorted(map_(lambda p: Path(p.stem).stem, (src_path / 'test').glob('*')))
-        test_ids: list[str] = []
-        # print(f"Found {len(test_ids)} test ids")
-        # print(test_ids[:10])
+        # Comment out if no test set available
+        test_ids: list[str] = sorted(map_(lambda p: Path(p.stem).stem, (src_path / 'test').glob('*')))
+        # Use this line instead:
+        # test_ids: list[str] = []
     
     validation_slice = slice(fold * retains, (fold + 1) * retains)
     validation_ids: list[str] = remaining_ids[validation_slice]
@@ -188,27 +185,6 @@ def get_splits(src_path: Path, retains: int, fold: int, test_mode: bool = False)
     assert (len(training_ids) + len(validation_ids)) == len(remaining_ids)
 
     return training_ids, validation_ids, test_ids
-
-### Original function:  ###
-# def get_splits(src_path: Path, retains: int, fold: int) -> tuple[list[str], list[str], list[str]]:
-#     ids: list[str] = sorted(map_(lambda p: p.name, (src_path / 'train').glob('*')))
-#     print(f"Founds {len(ids)} in the id list")
-#     print(ids[:10])
-#     assert len(ids) > retains
-
-#     random.shuffle(ids)  # Shuffle before to avoid any problem if the patients are sorted in any way
-#     validation_slice = slice(fold * retains, (fold + 1) * retains)
-#     validation_ids: list[str] = ids[validation_slice]
-#     assert len(validation_ids) == retains
-
-#     training_ids: list[str] = [e for e in ids if e not in validation_ids]
-#     assert (len(training_ids) + len(validation_ids)) == len(ids)
-
-#     test_ids: list[str] = sorted(map_(lambda p: Path(p.stem).stem, (src_path / 'test').glob('*')))
-#     print(f"Founds {len(test_ids)} test ids")
-#     print(test_ids[:10])
-
-#     return training_ids, validation_ids, test_ids
 
 def main(args: argparse.Namespace):
     src_path: Path = Path(args.source_dir)
